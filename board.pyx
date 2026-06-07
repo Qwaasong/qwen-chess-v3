@@ -4,6 +4,7 @@
 # cython: wraparound=False
 # cython: cdivision=True
 # cython: nonecheck=False
+
 """Board representation and move generation using Cython-accelerated Bitboards."""
 
 from __future__ import annotations
