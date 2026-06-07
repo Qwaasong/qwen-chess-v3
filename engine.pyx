@@ -452,6 +452,7 @@ cdef int negamax(
     int beta,
     int color,
     int ply,
+    int extensions = 0,
 ) except *:
     info.nodes += 1
 
@@ -464,6 +465,12 @@ cdef int negamax(
 
     cdef int alpha_orig = alpha
     cdef bint in_check = board.in_check()
+
+    # Check Extensions
+    cdef int extended = 0
+    if in_check and extensions < 8:
+        depth += 1
+        extended = 1
 
     # Transposition Table lookup (O(1) raw pointer, GIL-free)
     cdef unsigned long long key = board.zobrist_key
@@ -518,7 +525,7 @@ cdef int negamax(
         if has_non_pawn:
             R = 3 + depth // 4
             if board.make_null_move():
-                val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1)
+                val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended)
                 board.unmake_move_c()
                 
                 if info.stop:
@@ -527,7 +534,7 @@ cdef int negamax(
                 if val >= beta:
                     # Verification search for deep cuts (anti-zugzwang verification)
                     if depth >= 6:
-                        val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply)
+                        val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended)
                         if val >= beta:
                             return val
                     else:
@@ -615,7 +622,7 @@ cdef int negamax(
         legal_moves_searched += 1
 
         if legal_moves_searched == 1:
-            val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1)
+            val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)
         else:
             # --- Late Move Reductions (LMR) ---
             if (depth >= 2 and 
@@ -647,18 +654,18 @@ cdef int negamax(
                     r_int = depth - 1
 
                 # Search at reduced depth with null window
-                val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1)
+                val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)
                 
                 # Re-search at full depth with null window if reduced search failed high
                 if val > alpha and r_int > 0:
-                    val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1)
+                    val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)
             else:
                 # Search at full depth with null window
-                val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1)
+                val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)
             
             # Re-search with full window if null window search failed high
             if val > alpha and val < beta:
-                val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1)
+                val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)
         
         board.unmake_move_c()
 

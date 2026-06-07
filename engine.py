@@ -369,6 +369,7 @@ def negamax(
     beta: int,
     color: int,
     ply: int,
+    extensions: int = 0,
 ) -> int:
     """Recursively searches the game tree using Alpha-Beta Negamax algorithm."""
     info.nodes += 1
@@ -380,6 +381,12 @@ def negamax(
 
     alpha_orig = alpha
     in_check = board.in_check()
+
+    # Check Extensions
+    extended = 0
+    if in_check and extensions < 8:
+        depth += 1
+        extended = 1
 
     # Transposition Table lookup
     key = board.zobrist_key
@@ -431,7 +438,7 @@ def negamax(
         if has_non_pawn:
             R = 3 + depth // 4
             if board.make_null_move():
-                val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1)
+                val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended)
                 board.unmake_move()
                 
                 if info.stop:
@@ -440,7 +447,7 @@ def negamax(
                 if val >= beta:
                     # Verification search for deep cuts (anti-zugzwang verification)
                     if depth >= 6:
-                        val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply)
+                        val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended)
                         if val >= beta:
                             return val
                     else:
@@ -536,13 +543,13 @@ def negamax(
                 r_int = depth - 1
 
             # Search at reduced depth with null window
-            val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1)
+            val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)
             
             # Re-search if reduced search failed high
             if val > alpha and r_int > 0:
-                val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1)
+                val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)
         else:
-            val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1)
+            val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)
         
         board.unmake_move()
 

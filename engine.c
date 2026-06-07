@@ -1593,6 +1593,7 @@ struct __pyx_t_9engine_cy_SearchInfo;
 struct __pyx_t_9engine_cy_TTEntry;
 struct __pyx_t_9engine_cy_CScoredMove;
 struct __pyx_t_9engine_cy_CScoredMoveList;
+struct __pyx_opt_args_9engine_cy_negamax;
 
 /* "engine.pyx":222
  * 
@@ -1648,6 +1649,18 @@ struct __pyx_t_9engine_cy_CScoredMove {
 struct __pyx_t_9engine_cy_CScoredMoveList {
   struct __pyx_t_9engine_cy_CScoredMove moves[0x100];
   int count;
+};
+
+/* "engine.pyx":448
+ * 
+ * # --- Negamax Search ---
+ * cdef int negamax(             # <<<<<<<<<<<<<<
+ *     CustomBitboardBoard board,
+ *     int depth,
+*/
+struct __pyx_opt_args_9engine_cy_negamax {
+  int __pyx_n;
+  int extensions;
 };
 
 /* "board_cy.pxd":19
@@ -2491,7 +2504,7 @@ static CYTHON_INLINE void __pyx_f_9engine_cy_sort_moves(struct __pyx_t_9engine_c
 static int __pyx_f_9engine_cy_evaluate(struct __pyx_obj_8board_cy_CustomBitboardBoard *); /*proto*/
 static int __pyx_f_9engine_cy_get_mvv_lva_score(struct __pyx_obj_8board_cy_CustomBitboardBoard *, int); /*proto*/
 static int __pyx_f_9engine_cy_quiescence(struct __pyx_obj_8board_cy_CustomBitboardBoard *, int, int, int, int); /*proto*/
-static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardBoard *, int, int, int, int, int); /*proto*/
+static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardBoard *, int, int, int, int, int, struct __pyx_opt_args_9engine_cy_negamax *__pyx_optional_args); /*proto*/
 /* #### Code section: typeinfo ### */
 /* #### Code section: before_global_var ### */
 #define __Pyx_MODULE_NAME "engine_cy"
@@ -4835,9 +4848,11 @@ static int __pyx_f_9engine_cy_quiescence(struct __pyx_obj_8board_cy_CustomBitboa
  *     int depth,
 */
 
-static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardBoard *__pyx_v_board, int __pyx_v_depth, int __pyx_v_alpha, int __pyx_v_beta, int __pyx_v_color, int __pyx_v_ply) {
+static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardBoard *__pyx_v_board, int __pyx_v_depth, int __pyx_v_alpha, int __pyx_v_beta, int __pyx_v_color, int __pyx_v_ply, struct __pyx_opt_args_9engine_cy_negamax *__pyx_optional_args) {
+  int __pyx_v_extensions = ((int)0);
   int __pyx_v_alpha_orig;
   int __pyx_v_in_check;
+  int __pyx_v_extended;
   unsigned PY_LONG_LONG __pyx_v_key;
   unsigned int __pyx_v_idx;
   struct __pyx_t_9engine_cy_TTEntry *__pyx_v_entry;
@@ -4873,20 +4888,26 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
   PyObject *__pyx_t_4 = NULL;
   PyObject *__pyx_t_5 = NULL;
   size_t __pyx_t_6;
-  unsigned PY_LONG_LONG __pyx_t_7;
-  int __pyx_t_8;
+  int __pyx_t_7;
+  unsigned PY_LONG_LONG __pyx_t_8;
   int __pyx_t_9;
-  int __pyx_t_10;
+  struct __pyx_opt_args_9engine_cy_negamax __pyx_t_10;
   int __pyx_t_11;
   int __pyx_t_12;
   int __pyx_t_13;
+  int __pyx_t_14;
   int __pyx_lineno = 0;
   const char *__pyx_filename = NULL;
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("negamax", 0);
+  if (__pyx_optional_args) {
+    if (__pyx_optional_args->__pyx_n > 0) {
+      __pyx_v_extensions = __pyx_optional_args->extensions;
+    }
+  }
 
-  /* "engine.pyx":456
- *     int ply,
+  /* "engine.pyx":457
+ *     int extensions = 0,
  * ) except *:
  *     info.nodes += 1             # <<<<<<<<<<<<<<
  * 
@@ -4894,7 +4915,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   __pyx_v_9engine_cy_info.nodes = (__pyx_v_9engine_cy_info.nodes + 1);
 
-  /* "engine.pyx":458
+  /* "engine.pyx":459
  *     info.nodes += 1
  * 
  *     if info.nodes % 4096 == 0:             # <<<<<<<<<<<<<<
@@ -4904,7 +4925,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
   __pyx_t_1 = ((__pyx_v_9engine_cy_info.nodes % 0x1000) == 0);
   if (__pyx_t_1) {
 
-    /* "engine.pyx":459
+    /* "engine.pyx":460
  * 
  *     if info.nodes % 4096 == 0:
  *         with nogil:             # <<<<<<<<<<<<<<
@@ -4928,7 +4949,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
         }
     }
 
-    /* "engine.pyx":461
+    /* "engine.pyx":462
  *         with nogil:
  *             pass
  *         if time.time() - info.start_time > info.time_limit:             # <<<<<<<<<<<<<<
@@ -4936,9 +4957,9 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
  *             return 0
 */
     __pyx_t_3 = NULL;
-    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_mstate_global->__pyx_n_u_time); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 461, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_4, __pyx_mstate_global->__pyx_n_u_time); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 462, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_4);
-    __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_mstate_global->__pyx_n_u_time); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 461, __pyx_L1_error)
+    __pyx_t_5 = __Pyx_PyObject_GetAttrStr(__pyx_t_4, __pyx_mstate_global->__pyx_n_u_time); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 462, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
     __pyx_t_6 = 1;
@@ -4958,25 +4979,25 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
       __pyx_t_2 = __Pyx_PyObject_FastCall(__pyx_t_5, __pyx_callargs+__pyx_t_6, (1-__pyx_t_6) | (__pyx_t_6*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
       __Pyx_XDECREF(__pyx_t_3); __pyx_t_3 = 0;
       __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-      if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 461, __pyx_L1_error)
+      if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 462, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_2);
     }
-    __pyx_t_5 = PyFloat_FromDouble(__pyx_v_9engine_cy_info.start_time); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 461, __pyx_L1_error)
+    __pyx_t_5 = PyFloat_FromDouble(__pyx_v_9engine_cy_info.start_time); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 462, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
-    __pyx_t_3 = PyNumber_Subtract(__pyx_t_2, __pyx_t_5); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 461, __pyx_L1_error)
+    __pyx_t_3 = PyNumber_Subtract(__pyx_t_2, __pyx_t_5); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 462, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-    __pyx_t_5 = PyFloat_FromDouble(__pyx_v_9engine_cy_info.time_limit); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 461, __pyx_L1_error)
+    __pyx_t_5 = PyFloat_FromDouble(__pyx_v_9engine_cy_info.time_limit); if (unlikely(!__pyx_t_5)) __PYX_ERR(0, 462, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_5);
-    __pyx_t_2 = PyObject_RichCompare(__pyx_t_3, __pyx_t_5, Py_GT); __Pyx_XGOTREF(__pyx_t_2); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 461, __pyx_L1_error)
+    __pyx_t_2 = PyObject_RichCompare(__pyx_t_3, __pyx_t_5, Py_GT); __Pyx_XGOTREF(__pyx_t_2); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 462, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
     __Pyx_DECREF(__pyx_t_5); __pyx_t_5 = 0;
-    __pyx_t_1 = __Pyx_PyObject_IsTrue(__pyx_t_2); if (unlikely((__pyx_t_1 < 0))) __PYX_ERR(0, 461, __pyx_L1_error)
+    __pyx_t_1 = __Pyx_PyObject_IsTrue(__pyx_t_2); if (unlikely((__pyx_t_1 < 0))) __PYX_ERR(0, 462, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
     if (__pyx_t_1) {
 
-      /* "engine.pyx":462
+      /* "engine.pyx":463
  *             pass
  *         if time.time() - info.start_time > info.time_limit:
  *             info.stop = True             # <<<<<<<<<<<<<<
@@ -4985,7 +5006,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       __pyx_v_9engine_cy_info.stop = 1;
 
-      /* "engine.pyx":463
+      /* "engine.pyx":464
  *         if time.time() - info.start_time > info.time_limit:
  *             info.stop = True
  *             return 0             # <<<<<<<<<<<<<<
@@ -4995,7 +5016,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
       __pyx_r = 0;
       goto __pyx_L0;
 
-      /* "engine.pyx":461
+      /* "engine.pyx":462
  *         with nogil:
  *             pass
  *         if time.time() - info.start_time > info.time_limit:             # <<<<<<<<<<<<<<
@@ -5004,7 +5025,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     }
 
-    /* "engine.pyx":458
+    /* "engine.pyx":459
  *     info.nodes += 1
  * 
  *     if info.nodes % 4096 == 0:             # <<<<<<<<<<<<<<
@@ -5013,7 +5034,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   }
 
-  /* "engine.pyx":465
+  /* "engine.pyx":466
  *             return 0
  * 
  *     cdef int alpha_orig = alpha             # <<<<<<<<<<<<<<
@@ -5022,27 +5043,80 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   __pyx_v_alpha_orig = __pyx_v_alpha;
 
-  /* "engine.pyx":466
+  /* "engine.pyx":467
  * 
  *     cdef int alpha_orig = alpha
  *     cdef bint in_check = board.in_check()             # <<<<<<<<<<<<<<
  * 
- *     # Transposition Table lookup (O(1) raw pointer, GIL-free)
+ *     # Check Extensions
 */
-  __pyx_t_1 = ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->in_check(__pyx_v_board, 0); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 466, __pyx_L1_error)
+  __pyx_t_1 = ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->in_check(__pyx_v_board, 0); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 467, __pyx_L1_error)
   __pyx_v_in_check = __pyx_t_1;
 
-  /* "engine.pyx":469
+  /* "engine.pyx":470
+ * 
+ *     # Check Extensions
+ *     cdef int extended = 0             # <<<<<<<<<<<<<<
+ *     if in_check and extensions < 8:
+ *         depth += 1
+*/
+  __pyx_v_extended = 0;
+
+  /* "engine.pyx":471
+ *     # Check Extensions
+ *     cdef int extended = 0
+ *     if in_check and extensions < 8:             # <<<<<<<<<<<<<<
+ *         depth += 1
+ *         extended = 1
+*/
+  if (__pyx_v_in_check) {
+  } else {
+    __pyx_t_1 = __pyx_v_in_check;
+    goto __pyx_L9_bool_binop_done;
+  }
+  __pyx_t_7 = (__pyx_v_extensions < 8);
+  __pyx_t_1 = __pyx_t_7;
+  __pyx_L9_bool_binop_done:;
+  if (__pyx_t_1) {
+
+    /* "engine.pyx":472
+ *     cdef int extended = 0
+ *     if in_check and extensions < 8:
+ *         depth += 1             # <<<<<<<<<<<<<<
+ *         extended = 1
+ * 
+*/
+    __pyx_v_depth = (__pyx_v_depth + 1);
+
+    /* "engine.pyx":473
+ *     if in_check and extensions < 8:
+ *         depth += 1
+ *         extended = 1             # <<<<<<<<<<<<<<
+ * 
+ *     # Transposition Table lookup (O(1) raw pointer, GIL-free)
+*/
+    __pyx_v_extended = 1;
+
+    /* "engine.pyx":471
+ *     # Check Extensions
+ *     cdef int extended = 0
+ *     if in_check and extensions < 8:             # <<<<<<<<<<<<<<
+ *         depth += 1
+ *         extended = 1
+*/
+  }
+
+  /* "engine.pyx":476
  * 
  *     # Transposition Table lookup (O(1) raw pointer, GIL-free)
  *     cdef unsigned long long key = board.zobrist_key             # <<<<<<<<<<<<<<
  *     cdef unsigned int idx = key & (TT_SIZE - 1)
  *     cdef TTEntry *entry = &_tt[idx]
 */
-  __pyx_t_7 = __pyx_v_board->zobrist_key;
-  __pyx_v_key = __pyx_t_7;
+  __pyx_t_8 = __pyx_v_board->zobrist_key;
+  __pyx_v_key = __pyx_t_8;
 
-  /* "engine.pyx":470
+  /* "engine.pyx":477
  *     # Transposition Table lookup (O(1) raw pointer, GIL-free)
  *     cdef unsigned long long key = board.zobrist_key
  *     cdef unsigned int idx = key & (TT_SIZE - 1)             # <<<<<<<<<<<<<<
@@ -5051,7 +5125,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   __pyx_v_idx = (__pyx_v_key & 0xfffff);
 
-  /* "engine.pyx":471
+  /* "engine.pyx":478
  *     cdef unsigned long long key = board.zobrist_key
  *     cdef unsigned int idx = key & (TT_SIZE - 1)
  *     cdef TTEntry *entry = &_tt[idx]             # <<<<<<<<<<<<<<
@@ -5060,7 +5134,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   __pyx_v_entry = (&(__pyx_v_9engine_cy__tt[__pyx_v_idx]));
 
-  /* "engine.pyx":472
+  /* "engine.pyx":479
  *     cdef unsigned int idx = key & (TT_SIZE - 1)
  *     cdef TTEntry *entry = &_tt[idx]
  *     cdef int val, tt_move = -1, tt_val, q_flag             # <<<<<<<<<<<<<<
@@ -5069,7 +5143,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   __pyx_v_tt_move = -1;
 
-  /* "engine.pyx":474
+  /* "engine.pyx":481
  *     cdef int val, tt_move = -1, tt_val, q_flag
  * 
  *     if entry.key == key:             # <<<<<<<<<<<<<<
@@ -5079,7 +5153,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
   __pyx_t_1 = (__pyx_v_entry->key == __pyx_v_key);
   if (__pyx_t_1) {
 
-    /* "engine.pyx":475
+    /* "engine.pyx":482
  * 
  *     if entry.key == key:
  *         if entry.depth >= depth:             # <<<<<<<<<<<<<<
@@ -5089,17 +5163,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
     __pyx_t_1 = (__pyx_v_entry->depth >= __pyx_v_depth);
     if (__pyx_t_1) {
 
-      /* "engine.pyx":476
+      /* "engine.pyx":483
  *     if entry.key == key:
  *         if entry.depth >= depth:
  *             val = entry.val             # <<<<<<<<<<<<<<
  *             if val > MATE_THRESHOLD:
  *                 val -= ply
 */
-      __pyx_t_8 = __pyx_v_entry->val;
-      __pyx_v_val = __pyx_t_8;
+      __pyx_t_9 = __pyx_v_entry->val;
+      __pyx_v_val = __pyx_t_9;
 
-      /* "engine.pyx":477
+      /* "engine.pyx":484
  *         if entry.depth >= depth:
  *             val = entry.val
  *             if val > MATE_THRESHOLD:             # <<<<<<<<<<<<<<
@@ -5109,7 +5183,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
       __pyx_t_1 = (__pyx_v_val > __pyx_v_9engine_cy_MATE_THRESHOLD);
       if (__pyx_t_1) {
 
-        /* "engine.pyx":478
+        /* "engine.pyx":485
  *             val = entry.val
  *             if val > MATE_THRESHOLD:
  *                 val -= ply             # <<<<<<<<<<<<<<
@@ -5118,17 +5192,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         __pyx_v_val = (__pyx_v_val - __pyx_v_ply);
 
-        /* "engine.pyx":477
+        /* "engine.pyx":484
  *         if entry.depth >= depth:
  *             val = entry.val
  *             if val > MATE_THRESHOLD:             # <<<<<<<<<<<<<<
  *                 val -= ply
  *             elif val < -MATE_THRESHOLD:
 */
-        goto __pyx_L10;
+        goto __pyx_L13;
       }
 
-      /* "engine.pyx":479
+      /* "engine.pyx":486
  *             if val > MATE_THRESHOLD:
  *                 val -= ply
  *             elif val < -MATE_THRESHOLD:             # <<<<<<<<<<<<<<
@@ -5138,7 +5212,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
       __pyx_t_1 = (__pyx_v_val < (-__pyx_v_9engine_cy_MATE_THRESHOLD));
       if (__pyx_t_1) {
 
-        /* "engine.pyx":480
+        /* "engine.pyx":487
  *                 val -= ply
  *             elif val < -MATE_THRESHOLD:
  *                 val += ply             # <<<<<<<<<<<<<<
@@ -5147,7 +5221,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         __pyx_v_val = (__pyx_v_val + __pyx_v_ply);
 
-        /* "engine.pyx":479
+        /* "engine.pyx":486
  *             if val > MATE_THRESHOLD:
  *                 val -= ply
  *             elif val < -MATE_THRESHOLD:             # <<<<<<<<<<<<<<
@@ -5155,9 +5229,9 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
  * 
 */
       }
-      __pyx_L10:;
+      __pyx_L13:;
 
-      /* "engine.pyx":482
+      /* "engine.pyx":489
  *                 val += ply
  * 
  *             if entry.flag == 0:  # Exact             # <<<<<<<<<<<<<<
@@ -5167,7 +5241,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
       __pyx_t_1 = (__pyx_v_entry->flag == 0);
       if (__pyx_t_1) {
 
-        /* "engine.pyx":483
+        /* "engine.pyx":490
  * 
  *             if entry.flag == 0:  # Exact
  *                 return val             # <<<<<<<<<<<<<<
@@ -5177,7 +5251,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
         __pyx_r = __pyx_v_val;
         goto __pyx_L0;
 
-        /* "engine.pyx":482
+        /* "engine.pyx":489
  *                 val += ply
  * 
  *             if entry.flag == 0:  # Exact             # <<<<<<<<<<<<<<
@@ -5186,7 +5260,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       }
 
-      /* "engine.pyx":484
+      /* "engine.pyx":491
  *             if entry.flag == 0:  # Exact
  *                 return val
  *             if entry.flag == 1:  # Lower bound             # <<<<<<<<<<<<<<
@@ -5196,7 +5270,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
       __pyx_t_1 = (__pyx_v_entry->flag == 1);
       if (__pyx_t_1) {
 
-        /* "engine.pyx":485
+        /* "engine.pyx":492
  *                 return val
  *             if entry.flag == 1:  # Lower bound
  *                 if val >= beta:             # <<<<<<<<<<<<<<
@@ -5206,7 +5280,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
         __pyx_t_1 = (__pyx_v_val >= __pyx_v_beta);
         if (__pyx_t_1) {
 
-          /* "engine.pyx":486
+          /* "engine.pyx":493
  *             if entry.flag == 1:  # Lower bound
  *                 if val >= beta:
  *                     return val             # <<<<<<<<<<<<<<
@@ -5216,7 +5290,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
           __pyx_r = __pyx_v_val;
           goto __pyx_L0;
 
-          /* "engine.pyx":485
+          /* "engine.pyx":492
  *                 return val
  *             if entry.flag == 1:  # Lower bound
  *                 if val >= beta:             # <<<<<<<<<<<<<<
@@ -5225,7 +5299,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         }
 
-        /* "engine.pyx":487
+        /* "engine.pyx":494
  *                 if val >= beta:
  *                     return val
  *                 if val > alpha:             # <<<<<<<<<<<<<<
@@ -5235,7 +5309,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
         __pyx_t_1 = (__pyx_v_val > __pyx_v_alpha);
         if (__pyx_t_1) {
 
-          /* "engine.pyx":488
+          /* "engine.pyx":495
  *                     return val
  *                 if val > alpha:
  *                     alpha = val             # <<<<<<<<<<<<<<
@@ -5244,7 +5318,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
           __pyx_v_alpha = __pyx_v_val;
 
-          /* "engine.pyx":487
+          /* "engine.pyx":494
  *                 if val >= beta:
  *                     return val
  *                 if val > alpha:             # <<<<<<<<<<<<<<
@@ -5253,7 +5327,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         }
 
-        /* "engine.pyx":484
+        /* "engine.pyx":491
  *             if entry.flag == 0:  # Exact
  *                 return val
  *             if entry.flag == 1:  # Lower bound             # <<<<<<<<<<<<<<
@@ -5262,7 +5336,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       }
 
-      /* "engine.pyx":489
+      /* "engine.pyx":496
  *                 if val > alpha:
  *                     alpha = val
  *             if entry.flag == 2:  # Upper bound             # <<<<<<<<<<<<<<
@@ -5272,7 +5346,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
       __pyx_t_1 = (__pyx_v_entry->flag == 2);
       if (__pyx_t_1) {
 
-        /* "engine.pyx":490
+        /* "engine.pyx":497
  *                     alpha = val
  *             if entry.flag == 2:  # Upper bound
  *                 if val <= alpha:             # <<<<<<<<<<<<<<
@@ -5282,7 +5356,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
         __pyx_t_1 = (__pyx_v_val <= __pyx_v_alpha);
         if (__pyx_t_1) {
 
-          /* "engine.pyx":491
+          /* "engine.pyx":498
  *             if entry.flag == 2:  # Upper bound
  *                 if val <= alpha:
  *                     return val             # <<<<<<<<<<<<<<
@@ -5292,7 +5366,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
           __pyx_r = __pyx_v_val;
           goto __pyx_L0;
 
-          /* "engine.pyx":490
+          /* "engine.pyx":497
  *                     alpha = val
  *             if entry.flag == 2:  # Upper bound
  *                 if val <= alpha:             # <<<<<<<<<<<<<<
@@ -5301,7 +5375,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         }
 
-        /* "engine.pyx":492
+        /* "engine.pyx":499
  *                 if val <= alpha:
  *                     return val
  *                 if val < beta:             # <<<<<<<<<<<<<<
@@ -5311,7 +5385,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
         __pyx_t_1 = (__pyx_v_val < __pyx_v_beta);
         if (__pyx_t_1) {
 
-          /* "engine.pyx":493
+          /* "engine.pyx":500
  *                     return val
  *                 if val < beta:
  *                     beta = val             # <<<<<<<<<<<<<<
@@ -5320,7 +5394,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
           __pyx_v_beta = __pyx_v_val;
 
-          /* "engine.pyx":492
+          /* "engine.pyx":499
  *                 if val <= alpha:
  *                     return val
  *                 if val < beta:             # <<<<<<<<<<<<<<
@@ -5329,7 +5403,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         }
 
-        /* "engine.pyx":489
+        /* "engine.pyx":496
  *                 if val > alpha:
  *                     alpha = val
  *             if entry.flag == 2:  # Upper bound             # <<<<<<<<<<<<<<
@@ -5338,7 +5412,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       }
 
-      /* "engine.pyx":494
+      /* "engine.pyx":501
  *                 if val < beta:
  *                     beta = val
  *             if alpha >= beta:             # <<<<<<<<<<<<<<
@@ -5348,7 +5422,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
       __pyx_t_1 = (__pyx_v_alpha >= __pyx_v_beta);
       if (__pyx_t_1) {
 
-        /* "engine.pyx":495
+        /* "engine.pyx":502
  *                     beta = val
  *             if alpha >= beta:
  *                 return val             # <<<<<<<<<<<<<<
@@ -5358,7 +5432,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
         __pyx_r = __pyx_v_val;
         goto __pyx_L0;
 
-        /* "engine.pyx":494
+        /* "engine.pyx":501
  *                 if val < beta:
  *                     beta = val
  *             if alpha >= beta:             # <<<<<<<<<<<<<<
@@ -5367,7 +5441,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       }
 
-      /* "engine.pyx":475
+      /* "engine.pyx":482
  * 
  *     if entry.key == key:
  *         if entry.depth >= depth:             # <<<<<<<<<<<<<<
@@ -5376,17 +5450,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     }
 
-    /* "engine.pyx":496
+    /* "engine.pyx":503
  *             if alpha >= beta:
  *                 return val
  *         tt_move = entry.move             # <<<<<<<<<<<<<<
  * 
  *     # --- Null Move Pruning (NMP) ---
 */
-    __pyx_t_8 = __pyx_v_entry->move;
-    __pyx_v_tt_move = __pyx_t_8;
+    __pyx_t_9 = __pyx_v_entry->move;
+    __pyx_v_tt_move = __pyx_t_9;
 
-    /* "engine.pyx":474
+    /* "engine.pyx":481
  *     cdef int val, tt_move = -1, tt_val, q_flag
  * 
  *     if entry.key == key:             # <<<<<<<<<<<<<<
@@ -5395,7 +5469,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   }
 
-  /* "engine.pyx":499
+  /* "engine.pyx":506
  * 
  *     # --- Null Move Pruning (NMP) ---
  *     cdef bint has_non_pawn = False             # <<<<<<<<<<<<<<
@@ -5404,60 +5478,60 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   __pyx_v_has_non_pawn = 0;
 
-  /* "engine.pyx":501
+  /* "engine.pyx":508
  *     cdef bint has_non_pawn = False
  *     cdef int p, R
  *     if (depth >= 3 and             # <<<<<<<<<<<<<<
  *         not in_check and
  *         ply > 0 and
 */
-  __pyx_t_9 = (__pyx_v_depth >= 3);
-  if (__pyx_t_9) {
+  __pyx_t_7 = (__pyx_v_depth >= 3);
+  if (__pyx_t_7) {
   } else {
-    __pyx_t_1 = __pyx_t_9;
-    goto __pyx_L20_bool_binop_done;
+    __pyx_t_1 = __pyx_t_7;
+    goto __pyx_L23_bool_binop_done;
   }
 
-  /* "engine.pyx":502
+  /* "engine.pyx":509
  *     cdef int p, R
  *     if (depth >= 3 and
  *         not in_check and             # <<<<<<<<<<<<<<
  *         ply > 0 and
  *         not info.stop):
 */
-  __pyx_t_9 = (!__pyx_v_in_check);
-  if (__pyx_t_9) {
+  __pyx_t_7 = (!__pyx_v_in_check);
+  if (__pyx_t_7) {
   } else {
-    __pyx_t_1 = __pyx_t_9;
-    goto __pyx_L20_bool_binop_done;
+    __pyx_t_1 = __pyx_t_7;
+    goto __pyx_L23_bool_binop_done;
   }
 
-  /* "engine.pyx":503
+  /* "engine.pyx":510
  *     if (depth >= 3 and
  *         not in_check and
  *         ply > 0 and             # <<<<<<<<<<<<<<
  *         not info.stop):
  * 
 */
-  __pyx_t_9 = (__pyx_v_ply > 0);
-  if (__pyx_t_9) {
+  __pyx_t_7 = (__pyx_v_ply > 0);
+  if (__pyx_t_7) {
   } else {
-    __pyx_t_1 = __pyx_t_9;
-    goto __pyx_L20_bool_binop_done;
+    __pyx_t_1 = __pyx_t_7;
+    goto __pyx_L23_bool_binop_done;
   }
 
-  /* "engine.pyx":504
+  /* "engine.pyx":511
  *         not in_check and
  *         ply > 0 and
  *         not info.stop):             # <<<<<<<<<<<<<<
  * 
  *         # Check if side to move has non-pawn material (zugzwang safety)
 */
-  __pyx_t_9 = (!__pyx_v_9engine_cy_info.stop);
-  __pyx_t_1 = __pyx_t_9;
-  __pyx_L20_bool_binop_done:;
+  __pyx_t_7 = (!__pyx_v_9engine_cy_info.stop);
+  __pyx_t_1 = __pyx_t_7;
+  __pyx_L23_bool_binop_done:;
 
-  /* "engine.pyx":501
+  /* "engine.pyx":508
  *     cdef bint has_non_pawn = False
  *     cdef int p, R
  *     if (depth >= 3 and             # <<<<<<<<<<<<<<
@@ -5466,7 +5540,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   if (__pyx_t_1) {
 
-    /* "engine.pyx":507
+    /* "engine.pyx":514
  * 
  *         # Check if side to move has non-pawn material (zugzwang safety)
  *         if color == 1:             # <<<<<<<<<<<<<<
@@ -5476,17 +5550,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
     __pyx_t_1 = (__pyx_v_color == 1);
     if (__pyx_t_1) {
 
-      /* "engine.pyx":508
+      /* "engine.pyx":515
  *         # Check if side to move has non-pawn material (zugzwang safety)
  *         if color == 1:
  *             for p in range(1, 5): # P_N=1, P_B=2, P_R=3, P_Q=4             # <<<<<<<<<<<<<<
  *                 if board._bb[p] != 0:
  *                     has_non_pawn = True
 */
-      for (__pyx_t_8 = 1; __pyx_t_8 < 5; __pyx_t_8+=1) {
-        __pyx_v_p = __pyx_t_8;
+      for (__pyx_t_9 = 1; __pyx_t_9 < 5; __pyx_t_9+=1) {
+        __pyx_v_p = __pyx_t_9;
 
-        /* "engine.pyx":509
+        /* "engine.pyx":516
  *         if color == 1:
  *             for p in range(1, 5): # P_N=1, P_B=2, P_R=3, P_Q=4
  *                 if board._bb[p] != 0:             # <<<<<<<<<<<<<<
@@ -5496,7 +5570,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
         __pyx_t_1 = ((__pyx_v_board->_bb[__pyx_v_p]) != 0);
         if (__pyx_t_1) {
 
-          /* "engine.pyx":510
+          /* "engine.pyx":517
  *             for p in range(1, 5): # P_N=1, P_B=2, P_R=3, P_Q=4
  *                 if board._bb[p] != 0:
  *                     has_non_pawn = True             # <<<<<<<<<<<<<<
@@ -5505,78 +5579,18 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
           __pyx_v_has_non_pawn = 1;
 
-          /* "engine.pyx":511
+          /* "engine.pyx":518
  *                 if board._bb[p] != 0:
  *                     has_non_pawn = True
  *                     break             # <<<<<<<<<<<<<<
  *         else:
  *             for p in range(7, 11): # P_n=7, P_b=8, P_r=9, P_q=10
-*/
-          goto __pyx_L26_break;
-
-          /* "engine.pyx":509
- *         if color == 1:
- *             for p in range(1, 5): # P_N=1, P_B=2, P_R=3, P_Q=4
- *                 if board._bb[p] != 0:             # <<<<<<<<<<<<<<
- *                     has_non_pawn = True
- *                     break
-*/
-        }
-      }
-      __pyx_L26_break:;
-
-      /* "engine.pyx":507
- * 
- *         # Check if side to move has non-pawn material (zugzwang safety)
- *         if color == 1:             # <<<<<<<<<<<<<<
- *             for p in range(1, 5): # P_N=1, P_B=2, P_R=3, P_Q=4
- *                 if board._bb[p] != 0:
-*/
-      goto __pyx_L24;
-    }
-
-    /* "engine.pyx":513
- *                     break
- *         else:
- *             for p in range(7, 11): # P_n=7, P_b=8, P_r=9, P_q=10             # <<<<<<<<<<<<<<
- *                 if board._bb[p] != 0:
- *                     has_non_pawn = True
-*/
-    /*else*/ {
-      for (__pyx_t_8 = 7; __pyx_t_8 < 11; __pyx_t_8+=1) {
-        __pyx_v_p = __pyx_t_8;
-
-        /* "engine.pyx":514
- *         else:
- *             for p in range(7, 11): # P_n=7, P_b=8, P_r=9, P_q=10
- *                 if board._bb[p] != 0:             # <<<<<<<<<<<<<<
- *                     has_non_pawn = True
- *                     break
-*/
-        __pyx_t_1 = ((__pyx_v_board->_bb[__pyx_v_p]) != 0);
-        if (__pyx_t_1) {
-
-          /* "engine.pyx":515
- *             for p in range(7, 11): # P_n=7, P_b=8, P_r=9, P_q=10
- *                 if board._bb[p] != 0:
- *                     has_non_pawn = True             # <<<<<<<<<<<<<<
- *                     break
- * 
-*/
-          __pyx_v_has_non_pawn = 1;
-
-          /* "engine.pyx":516
- *                 if board._bb[p] != 0:
- *                     has_non_pawn = True
- *                     break             # <<<<<<<<<<<<<<
- * 
- *         if has_non_pawn:
 */
           goto __pyx_L29_break;
 
-          /* "engine.pyx":514
- *         else:
- *             for p in range(7, 11): # P_n=7, P_b=8, P_r=9, P_q=10
+          /* "engine.pyx":516
+ *         if color == 1:
+ *             for p in range(1, 5): # P_N=1, P_B=2, P_R=3, P_Q=4
  *                 if board._bb[p] != 0:             # <<<<<<<<<<<<<<
  *                     has_non_pawn = True
  *                     break
@@ -5584,10 +5598,70 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
         }
       }
       __pyx_L29_break:;
-    }
-    __pyx_L24:;
 
-    /* "engine.pyx":518
+      /* "engine.pyx":514
+ * 
+ *         # Check if side to move has non-pawn material (zugzwang safety)
+ *         if color == 1:             # <<<<<<<<<<<<<<
+ *             for p in range(1, 5): # P_N=1, P_B=2, P_R=3, P_Q=4
+ *                 if board._bb[p] != 0:
+*/
+      goto __pyx_L27;
+    }
+
+    /* "engine.pyx":520
+ *                     break
+ *         else:
+ *             for p in range(7, 11): # P_n=7, P_b=8, P_r=9, P_q=10             # <<<<<<<<<<<<<<
+ *                 if board._bb[p] != 0:
+ *                     has_non_pawn = True
+*/
+    /*else*/ {
+      for (__pyx_t_9 = 7; __pyx_t_9 < 11; __pyx_t_9+=1) {
+        __pyx_v_p = __pyx_t_9;
+
+        /* "engine.pyx":521
+ *         else:
+ *             for p in range(7, 11): # P_n=7, P_b=8, P_r=9, P_q=10
+ *                 if board._bb[p] != 0:             # <<<<<<<<<<<<<<
+ *                     has_non_pawn = True
+ *                     break
+*/
+        __pyx_t_1 = ((__pyx_v_board->_bb[__pyx_v_p]) != 0);
+        if (__pyx_t_1) {
+
+          /* "engine.pyx":522
+ *             for p in range(7, 11): # P_n=7, P_b=8, P_r=9, P_q=10
+ *                 if board._bb[p] != 0:
+ *                     has_non_pawn = True             # <<<<<<<<<<<<<<
+ *                     break
+ * 
+*/
+          __pyx_v_has_non_pawn = 1;
+
+          /* "engine.pyx":523
+ *                 if board._bb[p] != 0:
+ *                     has_non_pawn = True
+ *                     break             # <<<<<<<<<<<<<<
+ * 
+ *         if has_non_pawn:
+*/
+          goto __pyx_L32_break;
+
+          /* "engine.pyx":521
+ *         else:
+ *             for p in range(7, 11): # P_n=7, P_b=8, P_r=9, P_q=10
+ *                 if board._bb[p] != 0:             # <<<<<<<<<<<<<<
+ *                     has_non_pawn = True
+ *                     break
+*/
+        }
+      }
+      __pyx_L32_break:;
+    }
+    __pyx_L27:;
+
+    /* "engine.pyx":525
  *                     break
  * 
  *         if has_non_pawn:             # <<<<<<<<<<<<<<
@@ -5596,45 +5670,47 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     if (__pyx_v_has_non_pawn) {
 
-      /* "engine.pyx":519
+      /* "engine.pyx":526
  * 
  *         if has_non_pawn:
  *             R = 3 + depth // 4             # <<<<<<<<<<<<<<
  *             if board.make_null_move():
- *                 val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1)
+ *                 val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended)
 */
       __pyx_v_R = (3 + (__pyx_v_depth / 4));
 
-      /* "engine.pyx":520
+      /* "engine.pyx":527
  *         if has_non_pawn:
  *             R = 3 + depth // 4
  *             if board.make_null_move():             # <<<<<<<<<<<<<<
- *                 val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1)
+ *                 val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended)
  *                 board.unmake_move_c()
 */
-      __pyx_t_1 = ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->make_null_move(__pyx_v_board, 0); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 520, __pyx_L1_error)
+      __pyx_t_1 = ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->make_null_move(__pyx_v_board, 0); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 527, __pyx_L1_error)
       if (__pyx_t_1) {
 
-        /* "engine.pyx":521
+        /* "engine.pyx":528
  *             R = 3 + depth // 4
  *             if board.make_null_move():
- *                 val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1)             # <<<<<<<<<<<<<<
+ *                 val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended)             # <<<<<<<<<<<<<<
  *                 board.unmake_move_c()
  * 
 */
-        __pyx_t_8 = __pyx_f_9engine_cy_negamax(__pyx_v_board, ((__pyx_v_depth - 1) - __pyx_v_R), (-__pyx_v_beta), ((-__pyx_v_beta) + 1), (-__pyx_v_color), (__pyx_v_ply + 1)); if (unlikely(__pyx_t_8 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 521, __pyx_L1_error)
-        __pyx_v_val = (-__pyx_t_8);
+        __pyx_t_10.__pyx_n = 1;
+        __pyx_t_10.extensions = (__pyx_v_extensions + __pyx_v_extended);
+        __pyx_t_9 = __pyx_f_9engine_cy_negamax(__pyx_v_board, ((__pyx_v_depth - 1) - __pyx_v_R), (-__pyx_v_beta), ((-__pyx_v_beta) + 1), (-__pyx_v_color), (__pyx_v_ply + 1), &__pyx_t_10); if (unlikely(__pyx_t_9 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 528, __pyx_L1_error)
+        __pyx_v_val = (-__pyx_t_9);
 
-        /* "engine.pyx":522
+        /* "engine.pyx":529
  *             if board.make_null_move():
- *                 val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1)
+ *                 val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended)
  *                 board.unmake_move_c()             # <<<<<<<<<<<<<<
  * 
  *                 if info.stop:
 */
-        ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->unmake_move_c(__pyx_v_board); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 522, __pyx_L1_error)
+        ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->unmake_move_c(__pyx_v_board); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 529, __pyx_L1_error)
 
-        /* "engine.pyx":524
+        /* "engine.pyx":531
  *                 board.unmake_move_c()
  * 
  *                 if info.stop:             # <<<<<<<<<<<<<<
@@ -5643,7 +5719,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         if (__pyx_v_9engine_cy_info.stop) {
 
-          /* "engine.pyx":525
+          /* "engine.pyx":532
  * 
  *                 if info.stop:
  *                     return 0             # <<<<<<<<<<<<<<
@@ -5653,7 +5729,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
           __pyx_r = 0;
           goto __pyx_L0;
 
-          /* "engine.pyx":524
+          /* "engine.pyx":531
  *                 board.unmake_move_c()
  * 
  *                 if info.stop:             # <<<<<<<<<<<<<<
@@ -5662,7 +5738,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         }
 
-        /* "engine.pyx":527
+        /* "engine.pyx":534
  *                     return 0
  * 
  *                 if val >= beta:             # <<<<<<<<<<<<<<
@@ -5672,29 +5748,31 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
         __pyx_t_1 = (__pyx_v_val >= __pyx_v_beta);
         if (__pyx_t_1) {
 
-          /* "engine.pyx":529
+          /* "engine.pyx":536
  *                 if val >= beta:
  *                     # Verification search for deep cuts (anti-zugzwang verification)
  *                     if depth >= 6:             # <<<<<<<<<<<<<<
- *                         val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply)
+ *                         val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended)
  *                         if val >= beta:
 */
           __pyx_t_1 = (__pyx_v_depth >= 6);
           if (__pyx_t_1) {
 
-            /* "engine.pyx":530
+            /* "engine.pyx":537
  *                     # Verification search for deep cuts (anti-zugzwang verification)
  *                     if depth >= 6:
- *                         val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply)             # <<<<<<<<<<<<<<
+ *                         val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended)             # <<<<<<<<<<<<<<
  *                         if val >= beta:
  *                             return val
 */
-            __pyx_t_8 = __pyx_f_9engine_cy_negamax(__pyx_v_board, ((__pyx_v_depth - 1) - __pyx_v_R), (__pyx_v_beta - 1), __pyx_v_beta, __pyx_v_color, __pyx_v_ply); if (unlikely(__pyx_t_8 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 530, __pyx_L1_error)
-            __pyx_v_val = __pyx_t_8;
+            __pyx_t_10.__pyx_n = 1;
+            __pyx_t_10.extensions = (__pyx_v_extensions + __pyx_v_extended);
+            __pyx_t_9 = __pyx_f_9engine_cy_negamax(__pyx_v_board, ((__pyx_v_depth - 1) - __pyx_v_R), (__pyx_v_beta - 1), __pyx_v_beta, __pyx_v_color, __pyx_v_ply, &__pyx_t_10); if (unlikely(__pyx_t_9 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 537, __pyx_L1_error)
+            __pyx_v_val = __pyx_t_9;
 
-            /* "engine.pyx":531
+            /* "engine.pyx":538
  *                     if depth >= 6:
- *                         val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply)
+ *                         val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended)
  *                         if val >= beta:             # <<<<<<<<<<<<<<
  *                             return val
  *                     else:
@@ -5702,8 +5780,8 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
             __pyx_t_1 = (__pyx_v_val >= __pyx_v_beta);
             if (__pyx_t_1) {
 
-              /* "engine.pyx":532
- *                         val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply)
+              /* "engine.pyx":539
+ *                         val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended)
  *                         if val >= beta:
  *                             return val             # <<<<<<<<<<<<<<
  *                     else:
@@ -5712,26 +5790,26 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
               __pyx_r = __pyx_v_val;
               goto __pyx_L0;
 
-              /* "engine.pyx":531
+              /* "engine.pyx":538
  *                     if depth >= 6:
- *                         val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply)
+ *                         val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended)
  *                         if val >= beta:             # <<<<<<<<<<<<<<
  *                             return val
  *                     else:
 */
             }
 
-            /* "engine.pyx":529
+            /* "engine.pyx":536
  *                 if val >= beta:
  *                     # Verification search for deep cuts (anti-zugzwang verification)
  *                     if depth >= 6:             # <<<<<<<<<<<<<<
- *                         val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply)
+ *                         val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended)
  *                         if val >= beta:
 */
-            goto __pyx_L35;
+            goto __pyx_L38;
           }
 
-          /* "engine.pyx":534
+          /* "engine.pyx":541
  *                             return val
  *                     else:
  *                         return val             # <<<<<<<<<<<<<<
@@ -5742,9 +5820,9 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
             __pyx_r = __pyx_v_val;
             goto __pyx_L0;
           }
-          __pyx_L35:;
+          __pyx_L38:;
 
-          /* "engine.pyx":527
+          /* "engine.pyx":534
  *                     return 0
  * 
  *                 if val >= beta:             # <<<<<<<<<<<<<<
@@ -5753,16 +5831,16 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         }
 
-        /* "engine.pyx":520
+        /* "engine.pyx":527
  *         if has_non_pawn:
  *             R = 3 + depth // 4
  *             if board.make_null_move():             # <<<<<<<<<<<<<<
- *                 val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1)
+ *                 val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended)
  *                 board.unmake_move_c()
 */
       }
 
-      /* "engine.pyx":518
+      /* "engine.pyx":525
  *                     break
  * 
  *         if has_non_pawn:             # <<<<<<<<<<<<<<
@@ -5771,7 +5849,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     }
 
-    /* "engine.pyx":501
+    /* "engine.pyx":508
  *     cdef bint has_non_pawn = False
  *     cdef int p, R
  *     if (depth >= 3 and             # <<<<<<<<<<<<<<
@@ -5780,7 +5858,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   }
 
-  /* "engine.pyx":536
+  /* "engine.pyx":543
  *                         return val
  * 
  *     if depth <= 0:             # <<<<<<<<<<<<<<
@@ -5790,17 +5868,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
   __pyx_t_1 = (__pyx_v_depth <= 0);
   if (__pyx_t_1) {
 
-    /* "engine.pyx":537
+    /* "engine.pyx":544
  * 
  *     if depth <= 0:
  *         val = quiescence(board, alpha, beta, color, ply)             # <<<<<<<<<<<<<<
  *         tt_val = val
  *         if tt_val > MATE_THRESHOLD:
 */
-    __pyx_t_8 = __pyx_f_9engine_cy_quiescence(__pyx_v_board, __pyx_v_alpha, __pyx_v_beta, __pyx_v_color, __pyx_v_ply); if (unlikely(__pyx_t_8 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 537, __pyx_L1_error)
-    __pyx_v_val = __pyx_t_8;
+    __pyx_t_9 = __pyx_f_9engine_cy_quiescence(__pyx_v_board, __pyx_v_alpha, __pyx_v_beta, __pyx_v_color, __pyx_v_ply); if (unlikely(__pyx_t_9 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 544, __pyx_L1_error)
+    __pyx_v_val = __pyx_t_9;
 
-    /* "engine.pyx":538
+    /* "engine.pyx":545
  *     if depth <= 0:
  *         val = quiescence(board, alpha, beta, color, ply)
  *         tt_val = val             # <<<<<<<<<<<<<<
@@ -5809,7 +5887,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_tt_val = __pyx_v_val;
 
-    /* "engine.pyx":539
+    /* "engine.pyx":546
  *         val = quiescence(board, alpha, beta, color, ply)
  *         tt_val = val
  *         if tt_val > MATE_THRESHOLD:             # <<<<<<<<<<<<<<
@@ -5819,7 +5897,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
     __pyx_t_1 = (__pyx_v_tt_val > __pyx_v_9engine_cy_MATE_THRESHOLD);
     if (__pyx_t_1) {
 
-      /* "engine.pyx":540
+      /* "engine.pyx":547
  *         tt_val = val
  *         if tt_val > MATE_THRESHOLD:
  *             tt_val += ply             # <<<<<<<<<<<<<<
@@ -5828,17 +5906,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       __pyx_v_tt_val = (__pyx_v_tt_val + __pyx_v_ply);
 
-      /* "engine.pyx":539
+      /* "engine.pyx":546
  *         val = quiescence(board, alpha, beta, color, ply)
  *         tt_val = val
  *         if tt_val > MATE_THRESHOLD:             # <<<<<<<<<<<<<<
  *             tt_val += ply
  *         elif tt_val < -MATE_THRESHOLD:
 */
-      goto __pyx_L38;
+      goto __pyx_L41;
     }
 
-    /* "engine.pyx":541
+    /* "engine.pyx":548
  *         if tt_val > MATE_THRESHOLD:
  *             tt_val += ply
  *         elif tt_val < -MATE_THRESHOLD:             # <<<<<<<<<<<<<<
@@ -5848,7 +5926,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
     __pyx_t_1 = (__pyx_v_tt_val < (-__pyx_v_9engine_cy_MATE_THRESHOLD));
     if (__pyx_t_1) {
 
-      /* "engine.pyx":542
+      /* "engine.pyx":549
  *             tt_val += ply
  *         elif tt_val < -MATE_THRESHOLD:
  *             tt_val -= ply             # <<<<<<<<<<<<<<
@@ -5857,7 +5935,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       __pyx_v_tt_val = (__pyx_v_tt_val - __pyx_v_ply);
 
-      /* "engine.pyx":541
+      /* "engine.pyx":548
  *         if tt_val > MATE_THRESHOLD:
  *             tt_val += ply
  *         elif tt_val < -MATE_THRESHOLD:             # <<<<<<<<<<<<<<
@@ -5865,9 +5943,9 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
  * 
 */
     }
-    __pyx_L38:;
+    __pyx_L41:;
 
-    /* "engine.pyx":544
+    /* "engine.pyx":551
  *             tt_val -= ply
  * 
  *         q_flag = 0             # <<<<<<<<<<<<<<
@@ -5876,7 +5954,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_q_flag = 0;
 
-    /* "engine.pyx":545
+    /* "engine.pyx":552
  * 
  *         q_flag = 0
  *         if val <= alpha:             # <<<<<<<<<<<<<<
@@ -5886,7 +5964,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
     __pyx_t_1 = (__pyx_v_val <= __pyx_v_alpha);
     if (__pyx_t_1) {
 
-      /* "engine.pyx":546
+      /* "engine.pyx":553
  *         q_flag = 0
  *         if val <= alpha:
  *             q_flag = 2             # <<<<<<<<<<<<<<
@@ -5895,17 +5973,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       __pyx_v_q_flag = 2;
 
-      /* "engine.pyx":545
+      /* "engine.pyx":552
  * 
  *         q_flag = 0
  *         if val <= alpha:             # <<<<<<<<<<<<<<
  *             q_flag = 2
  *         elif val >= beta:
 */
-      goto __pyx_L39;
+      goto __pyx_L42;
     }
 
-    /* "engine.pyx":547
+    /* "engine.pyx":554
  *         if val <= alpha:
  *             q_flag = 2
  *         elif val >= beta:             # <<<<<<<<<<<<<<
@@ -5915,7 +5993,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
     __pyx_t_1 = (__pyx_v_val >= __pyx_v_beta);
     if (__pyx_t_1) {
 
-      /* "engine.pyx":548
+      /* "engine.pyx":555
  *             q_flag = 2
  *         elif val >= beta:
  *             q_flag = 1             # <<<<<<<<<<<<<<
@@ -5924,7 +6002,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       __pyx_v_q_flag = 1;
 
-      /* "engine.pyx":547
+      /* "engine.pyx":554
  *         if val <= alpha:
  *             q_flag = 2
  *         elif val >= beta:             # <<<<<<<<<<<<<<
@@ -5932,9 +6010,9 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
  * 
 */
     }
-    __pyx_L39:;
+    __pyx_L42:;
 
-    /* "engine.pyx":550
+    /* "engine.pyx":557
  *             q_flag = 1
  * 
  *         entry.key = key             # <<<<<<<<<<<<<<
@@ -5943,7 +6021,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_entry->key = __pyx_v_key;
 
-    /* "engine.pyx":551
+    /* "engine.pyx":558
  * 
  *         entry.key = key
  *         entry.depth = 0             # <<<<<<<<<<<<<<
@@ -5952,7 +6030,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_entry->depth = 0;
 
-    /* "engine.pyx":552
+    /* "engine.pyx":559
  *         entry.key = key
  *         entry.depth = 0
  *         entry.val = tt_val             # <<<<<<<<<<<<<<
@@ -5961,7 +6039,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_entry->val = __pyx_v_tt_val;
 
-    /* "engine.pyx":553
+    /* "engine.pyx":560
  *         entry.depth = 0
  *         entry.val = tt_val
  *         entry.flag = q_flag             # <<<<<<<<<<<<<<
@@ -5970,7 +6048,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_entry->flag = __pyx_v_q_flag;
 
-    /* "engine.pyx":554
+    /* "engine.pyx":561
  *         entry.val = tt_val
  *         entry.flag = q_flag
  *         entry.move = -1             # <<<<<<<<<<<<<<
@@ -5979,7 +6057,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_entry->move = -1;
 
-    /* "engine.pyx":555
+    /* "engine.pyx":562
  *         entry.flag = q_flag
  *         entry.move = -1
  *         return val             # <<<<<<<<<<<<<<
@@ -5989,7 +6067,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
     __pyx_r = __pyx_v_val;
     goto __pyx_L0;
 
-    /* "engine.pyx":536
+    /* "engine.pyx":543
  *                         return val
  * 
  *     if depth <= 0:             # <<<<<<<<<<<<<<
@@ -5998,7 +6076,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   }
 
-  /* "engine.pyx":558
+  /* "engine.pyx":565
  * 
  *     cdef CMoveList pseudo_moves
  *     pseudo_moves.count = 0             # <<<<<<<<<<<<<<
@@ -6007,16 +6085,16 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   __pyx_v_pseudo_moves.count = 0;
 
-  /* "engine.pyx":559
+  /* "engine.pyx":566
  *     cdef CMoveList pseudo_moves
  *     pseudo_moves.count = 0
  *     board._generate_pseudo_legal_moves_c(&pseudo_moves)             # <<<<<<<<<<<<<<
  * 
  *     # Move Ordering
 */
-  ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->_generate_pseudo_legal_moves_c(__pyx_v_board, (&__pyx_v_pseudo_moves)); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 559, __pyx_L1_error)
+  ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->_generate_pseudo_legal_moves_c(__pyx_v_board, (&__pyx_v_pseudo_moves)); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 566, __pyx_L1_error)
 
-  /* "engine.pyx":563
+  /* "engine.pyx":570
  *     # Move Ordering
  *     cdef CScoredMoveList moves_scored
  *     moves_scored.count = 0             # <<<<<<<<<<<<<<
@@ -6025,7 +6103,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   __pyx_v_moves_scored.count = 0;
 
-  /* "engine.pyx":565
+  /* "engine.pyx":572
  *     moves_scored.count = 0
  * 
  *     cdef int i, move, from_sq, to_sq, flag, score, best_val = -INFINITE, best_move = -1             # <<<<<<<<<<<<<<
@@ -6035,19 +6113,19 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
   __pyx_v_best_val = (-__pyx_v_9engine_cy_INFINITE);
   __pyx_v_best_move = -1;
 
-  /* "engine.pyx":569
+  /* "engine.pyx":576
  *     cdef int p_type
  * 
  *     for i in range(pseudo_moves.count):             # <<<<<<<<<<<<<<
  *         move = pseudo_moves.moves[i]
  *         if move == tt_move:
 */
-  __pyx_t_8 = __pyx_v_pseudo_moves.count;
-  __pyx_t_10 = __pyx_t_8;
-  for (__pyx_t_11 = 0; __pyx_t_11 < __pyx_t_10; __pyx_t_11+=1) {
-    __pyx_v_i = __pyx_t_11;
+  __pyx_t_9 = __pyx_v_pseudo_moves.count;
+  __pyx_t_11 = __pyx_t_9;
+  for (__pyx_t_12 = 0; __pyx_t_12 < __pyx_t_11; __pyx_t_12+=1) {
+    __pyx_v_i = __pyx_t_12;
 
-    /* "engine.pyx":570
+    /* "engine.pyx":577
  * 
  *     for i in range(pseudo_moves.count):
  *         move = pseudo_moves.moves[i]             # <<<<<<<<<<<<<<
@@ -6056,7 +6134,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_move = (__pyx_v_pseudo_moves.moves[__pyx_v_i]);
 
-    /* "engine.pyx":571
+    /* "engine.pyx":578
  *     for i in range(pseudo_moves.count):
  *         move = pseudo_moves.moves[i]
  *         if move == tt_move:             # <<<<<<<<<<<<<<
@@ -6066,7 +6144,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
     __pyx_t_1 = (__pyx_v_move == __pyx_v_tt_move);
     if (__pyx_t_1) {
 
-      /* "engine.pyx":572
+      /* "engine.pyx":579
  *         move = pseudo_moves.moves[i]
  *         if move == tt_move:
  *             score = 1000000             # <<<<<<<<<<<<<<
@@ -6075,17 +6153,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       __pyx_v_score = 0xF4240;
 
-      /* "engine.pyx":571
+      /* "engine.pyx":578
  *     for i in range(pseudo_moves.count):
  *         move = pseudo_moves.moves[i]
  *         if move == tt_move:             # <<<<<<<<<<<<<<
  *             score = 1000000
  *         else:
 */
-      goto __pyx_L42;
+      goto __pyx_L45;
     }
 
-    /* "engine.pyx":574
+    /* "engine.pyx":581
  *             score = 1000000
  *         else:
  *             from_sq = move & 0x3F             # <<<<<<<<<<<<<<
@@ -6095,7 +6173,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
     /*else*/ {
       __pyx_v_from_sq = (__pyx_v_move & 0x3F);
 
-      /* "engine.pyx":575
+      /* "engine.pyx":582
  *         else:
  *             from_sq = move & 0x3F
  *             to_sq = (move >> 6) & 0x3F             # <<<<<<<<<<<<<<
@@ -6104,7 +6182,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       __pyx_v_to_sq = ((__pyx_v_move >> 6) & 0x3F);
 
-      /* "engine.pyx":576
+      /* "engine.pyx":583
  *             from_sq = move & 0x3F
  *             to_sq = (move >> 6) & 0x3F
  *             flag = (move >> 12) & 0x0F             # <<<<<<<<<<<<<<
@@ -6113,25 +6191,25 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       __pyx_v_flag = ((__pyx_v_move >> 12) & 0x0F);
 
-      /* "engine.pyx":577
+      /* "engine.pyx":584
  *             to_sq = (move >> 6) & 0x3F
  *             flag = (move >> 12) & 0x0F
  *             is_cap = flag == 3 or (board.piece_map[to_sq] != -1)             # <<<<<<<<<<<<<<
  * 
  *             if is_cap:
 */
-      __pyx_t_9 = (__pyx_v_flag == 3);
-      if (!__pyx_t_9) {
+      __pyx_t_7 = (__pyx_v_flag == 3);
+      if (!__pyx_t_7) {
       } else {
-        __pyx_t_1 = __pyx_t_9;
-        goto __pyx_L43_bool_binop_done;
+        __pyx_t_1 = __pyx_t_7;
+        goto __pyx_L46_bool_binop_done;
       }
-      __pyx_t_9 = ((__pyx_v_board->piece_map[__pyx_v_to_sq]) != -1L);
-      __pyx_t_1 = __pyx_t_9;
-      __pyx_L43_bool_binop_done:;
+      __pyx_t_7 = ((__pyx_v_board->piece_map[__pyx_v_to_sq]) != -1L);
+      __pyx_t_1 = __pyx_t_7;
+      __pyx_L46_bool_binop_done:;
       __pyx_v_is_cap = __pyx_t_1;
 
-      /* "engine.pyx":579
+      /* "engine.pyx":586
  *             is_cap = flag == 3 or (board.piece_map[to_sq] != -1)
  * 
  *             if is_cap:             # <<<<<<<<<<<<<<
@@ -6140,27 +6218,27 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       if (__pyx_v_is_cap) {
 
-        /* "engine.pyx":580
+        /* "engine.pyx":587
  * 
  *             if is_cap:
  *                 score = 100000 + get_mvv_lva_score(board, move)             # <<<<<<<<<<<<<<
  *             elif flag >= 8:
  *                 score = 90000 + PIECE_VALUES[0]
 */
-        __pyx_t_12 = __pyx_f_9engine_cy_get_mvv_lva_score(__pyx_v_board, __pyx_v_move); if (unlikely(__pyx_t_12 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 580, __pyx_L1_error)
-        __pyx_v_score = (0x186A0 + __pyx_t_12);
+        __pyx_t_13 = __pyx_f_9engine_cy_get_mvv_lva_score(__pyx_v_board, __pyx_v_move); if (unlikely(__pyx_t_13 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 587, __pyx_L1_error)
+        __pyx_v_score = (0x186A0 + __pyx_t_13);
 
-        /* "engine.pyx":579
+        /* "engine.pyx":586
  *             is_cap = flag == 3 or (board.piece_map[to_sq] != -1)
  * 
  *             if is_cap:             # <<<<<<<<<<<<<<
  *                 score = 100000 + get_mvv_lva_score(board, move)
  *             elif flag >= 8:
 */
-        goto __pyx_L45;
+        goto __pyx_L48;
       }
 
-      /* "engine.pyx":581
+      /* "engine.pyx":588
  *             if is_cap:
  *                 score = 100000 + get_mvv_lva_score(board, move)
  *             elif flag >= 8:             # <<<<<<<<<<<<<<
@@ -6170,7 +6248,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
       __pyx_t_1 = (__pyx_v_flag >= 8);
       if (__pyx_t_1) {
 
-        /* "engine.pyx":582
+        /* "engine.pyx":589
  *                 score = 100000 + get_mvv_lva_score(board, move)
  *             elif flag >= 8:
  *                 score = 90000 + PIECE_VALUES[0]             # <<<<<<<<<<<<<<
@@ -6179,17 +6257,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         __pyx_v_score = (0x15F90 + (__pyx_v_9engine_cy_PIECE_VALUES[0]));
 
-        /* "engine.pyx":581
+        /* "engine.pyx":588
  *             if is_cap:
  *                 score = 100000 + get_mvv_lva_score(board, move)
  *             elif flag >= 8:             # <<<<<<<<<<<<<<
  *                 score = 90000 + PIECE_VALUES[0]
  *             else:
 */
-        goto __pyx_L45;
+        goto __pyx_L48;
       }
 
-      /* "engine.pyx":584
+      /* "engine.pyx":591
  *                 score = 90000 + PIECE_VALUES[0]
  *             else:
  *                 if move == killer_moves[0][ply]:             # <<<<<<<<<<<<<<
@@ -6200,7 +6278,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
         __pyx_t_1 = (__pyx_v_move == ((__pyx_v_9engine_cy_killer_moves[0])[__pyx_v_ply]));
         if (__pyx_t_1) {
 
-          /* "engine.pyx":585
+          /* "engine.pyx":592
  *             else:
  *                 if move == killer_moves[0][ply]:
  *                     score = 9000             # <<<<<<<<<<<<<<
@@ -6209,17 +6287,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
           __pyx_v_score = 0x2328;
 
-          /* "engine.pyx":584
+          /* "engine.pyx":591
  *                 score = 90000 + PIECE_VALUES[0]
  *             else:
  *                 if move == killer_moves[0][ply]:             # <<<<<<<<<<<<<<
  *                     score = 9000
  *                 elif move == killer_moves[1][ply]:
 */
-          goto __pyx_L46;
+          goto __pyx_L49;
         }
 
-        /* "engine.pyx":586
+        /* "engine.pyx":593
  *                 if move == killer_moves[0][ply]:
  *                     score = 9000
  *                 elif move == killer_moves[1][ply]:             # <<<<<<<<<<<<<<
@@ -6229,7 +6307,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
         __pyx_t_1 = (__pyx_v_move == ((__pyx_v_9engine_cy_killer_moves[1])[__pyx_v_ply]));
         if (__pyx_t_1) {
 
-          /* "engine.pyx":587
+          /* "engine.pyx":594
  *                     score = 9000
  *                 elif move == killer_moves[1][ply]:
  *                     score = 8000             # <<<<<<<<<<<<<<
@@ -6238,17 +6316,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
           __pyx_v_score = 0x1F40;
 
-          /* "engine.pyx":586
+          /* "engine.pyx":593
  *                 if move == killer_moves[0][ply]:
  *                     score = 9000
  *                 elif move == killer_moves[1][ply]:             # <<<<<<<<<<<<<<
  *                     score = 8000
  *                 else:
 */
-          goto __pyx_L46;
+          goto __pyx_L49;
         }
 
-        /* "engine.pyx":589
+        /* "engine.pyx":596
  *                     score = 8000
  *                 else:
  *                     p_type = board.piece_map[from_sq]             # <<<<<<<<<<<<<<
@@ -6258,7 +6336,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
         /*else*/ {
           __pyx_v_p_type = (__pyx_v_board->piece_map[__pyx_v_from_sq]);
 
-          /* "engine.pyx":590
+          /* "engine.pyx":597
  *                 else:
  *                     p_type = board.piece_map[from_sq]
  *                     if p_type != -1:             # <<<<<<<<<<<<<<
@@ -6268,7 +6346,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
           __pyx_t_1 = (__pyx_v_p_type != -1L);
           if (__pyx_t_1) {
 
-            /* "engine.pyx":591
+            /* "engine.pyx":598
  *                     p_type = board.piece_map[from_sq]
  *                     if p_type != -1:
  *                         score = history_moves[p_type][to_sq]             # <<<<<<<<<<<<<<
@@ -6277,17 +6355,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
             __pyx_v_score = ((__pyx_v_9engine_cy_history_moves[__pyx_v_p_type])[__pyx_v_to_sq]);
 
-            /* "engine.pyx":590
+            /* "engine.pyx":597
  *                 else:
  *                     p_type = board.piece_map[from_sq]
  *                     if p_type != -1:             # <<<<<<<<<<<<<<
  *                         score = history_moves[p_type][to_sq]
  *                     else:
 */
-            goto __pyx_L47;
+            goto __pyx_L50;
           }
 
-          /* "engine.pyx":593
+          /* "engine.pyx":600
  *                         score = history_moves[p_type][to_sq]
  *                     else:
  *                         score = 0             # <<<<<<<<<<<<<<
@@ -6297,15 +6375,15 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
           /*else*/ {
             __pyx_v_score = 0;
           }
-          __pyx_L47:;
+          __pyx_L50:;
         }
-        __pyx_L46:;
+        __pyx_L49:;
       }
-      __pyx_L45:;
+      __pyx_L48:;
     }
-    __pyx_L42:;
+    __pyx_L45:;
 
-    /* "engine.pyx":594
+    /* "engine.pyx":601
  *                     else:
  *                         score = 0
  *         moves_scored.moves[moves_scored.count].move = move             # <<<<<<<<<<<<<<
@@ -6314,7 +6392,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     (__pyx_v_moves_scored.moves[__pyx_v_moves_scored.count]).move = __pyx_v_move;
 
-    /* "engine.pyx":595
+    /* "engine.pyx":602
  *                         score = 0
  *         moves_scored.moves[moves_scored.count].move = move
  *         moves_scored.moves[moves_scored.count].score = score             # <<<<<<<<<<<<<<
@@ -6323,7 +6401,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     (__pyx_v_moves_scored.moves[__pyx_v_moves_scored.count]).score = __pyx_v_score;
 
-    /* "engine.pyx":596
+    /* "engine.pyx":603
  *         moves_scored.moves[moves_scored.count].move = move
  *         moves_scored.moves[moves_scored.count].score = score
  *         moves_scored.count += 1             # <<<<<<<<<<<<<<
@@ -6333,7 +6411,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
     __pyx_v_moves_scored.count = (__pyx_v_moves_scored.count + 1);
   }
 
-  /* "engine.pyx":598
+  /* "engine.pyx":605
  *         moves_scored.count += 1
  * 
  *     sort_moves(&moves_scored)             # <<<<<<<<<<<<<<
@@ -6342,7 +6420,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   __pyx_f_9engine_cy_sort_moves((&__pyx_v_moves_scored));
 
-  /* "engine.pyx":600
+  /* "engine.pyx":607
  *     sort_moves(&moves_scored)
  * 
  *     cdef int legal_moves_searched = 0             # <<<<<<<<<<<<<<
@@ -6351,7 +6429,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   __pyx_v_legal_moves_searched = 0;
 
-  /* "engine.pyx":602
+  /* "engine.pyx":609
  *     cdef int legal_moves_searched = 0
  *     cdef int r_val, r_int
  *     cdef bint pv_node = (beta - alpha) > 1             # <<<<<<<<<<<<<<
@@ -6360,29 +6438,29 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   __pyx_v_pv_node = ((__pyx_v_beta - __pyx_v_alpha) > 1);
 
-  /* "engine.pyx":604
+  /* "engine.pyx":611
  *     cdef bint pv_node = (beta - alpha) > 1
  * 
  *     for i in range(moves_scored.count):             # <<<<<<<<<<<<<<
  *         move = moves_scored.moves[i].move
  *         from_sq = move & 0x3F
 */
-  __pyx_t_8 = __pyx_v_moves_scored.count;
-  __pyx_t_10 = __pyx_t_8;
-  for (__pyx_t_11 = 0; __pyx_t_11 < __pyx_t_10; __pyx_t_11+=1) {
-    __pyx_v_i = __pyx_t_11;
+  __pyx_t_9 = __pyx_v_moves_scored.count;
+  __pyx_t_11 = __pyx_t_9;
+  for (__pyx_t_12 = 0; __pyx_t_12 < __pyx_t_11; __pyx_t_12+=1) {
+    __pyx_v_i = __pyx_t_12;
 
-    /* "engine.pyx":605
+    /* "engine.pyx":612
  * 
  *     for i in range(moves_scored.count):
  *         move = moves_scored.moves[i].move             # <<<<<<<<<<<<<<
  *         from_sq = move & 0x3F
  *         to_sq = (move >> 6) & 0x3F
 */
-    __pyx_t_12 = (__pyx_v_moves_scored.moves[__pyx_v_i]).move;
-    __pyx_v_move = __pyx_t_12;
+    __pyx_t_13 = (__pyx_v_moves_scored.moves[__pyx_v_i]).move;
+    __pyx_v_move = __pyx_t_13;
 
-    /* "engine.pyx":606
+    /* "engine.pyx":613
  *     for i in range(moves_scored.count):
  *         move = moves_scored.moves[i].move
  *         from_sq = move & 0x3F             # <<<<<<<<<<<<<<
@@ -6391,7 +6469,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_from_sq = (__pyx_v_move & 0x3F);
 
-    /* "engine.pyx":607
+    /* "engine.pyx":614
  *         move = moves_scored.moves[i].move
  *         from_sq = move & 0x3F
  *         to_sq = (move >> 6) & 0x3F             # <<<<<<<<<<<<<<
@@ -6400,7 +6478,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_to_sq = ((__pyx_v_move >> 6) & 0x3F);
 
-    /* "engine.pyx":608
+    /* "engine.pyx":615
  *         from_sq = move & 0x3F
  *         to_sq = (move >> 6) & 0x3F
  *         flag = (move >> 12) & 0x0F             # <<<<<<<<<<<<<<
@@ -6409,54 +6487,54 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_flag = ((__pyx_v_move >> 12) & 0x0F);
 
-    /* "engine.pyx":609
+    /* "engine.pyx":616
  *         to_sq = (move >> 6) & 0x3F
  *         flag = (move >> 12) & 0x0F
  *         is_cap = flag == 3 or (board.piece_map[to_sq] != -1)             # <<<<<<<<<<<<<<
  * 
  *         if not board.make_move_c(move):
 */
-    __pyx_t_9 = (__pyx_v_flag == 3);
-    if (!__pyx_t_9) {
+    __pyx_t_7 = (__pyx_v_flag == 3);
+    if (!__pyx_t_7) {
     } else {
-      __pyx_t_1 = __pyx_t_9;
-      goto __pyx_L50_bool_binop_done;
+      __pyx_t_1 = __pyx_t_7;
+      goto __pyx_L53_bool_binop_done;
     }
-    __pyx_t_9 = ((__pyx_v_board->piece_map[__pyx_v_to_sq]) != -1L);
-    __pyx_t_1 = __pyx_t_9;
-    __pyx_L50_bool_binop_done:;
+    __pyx_t_7 = ((__pyx_v_board->piece_map[__pyx_v_to_sq]) != -1L);
+    __pyx_t_1 = __pyx_t_7;
+    __pyx_L53_bool_binop_done:;
     __pyx_v_is_cap = __pyx_t_1;
 
-    /* "engine.pyx":611
+    /* "engine.pyx":618
  *         is_cap = flag == 3 or (board.piece_map[to_sq] != -1)
  * 
  *         if not board.make_move_c(move):             # <<<<<<<<<<<<<<
  *             board.unmake_move_c()
  *             continue
 */
-    __pyx_t_1 = ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->make_move_c(__pyx_v_board, __pyx_v_move); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 611, __pyx_L1_error)
-    __pyx_t_9 = (!__pyx_t_1);
-    if (__pyx_t_9) {
+    __pyx_t_1 = ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->make_move_c(__pyx_v_board, __pyx_v_move); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 618, __pyx_L1_error)
+    __pyx_t_7 = (!__pyx_t_1);
+    if (__pyx_t_7) {
 
-      /* "engine.pyx":612
+      /* "engine.pyx":619
  * 
  *         if not board.make_move_c(move):
  *             board.unmake_move_c()             # <<<<<<<<<<<<<<
  *             continue
  * 
 */
-      ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->unmake_move_c(__pyx_v_board); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 612, __pyx_L1_error)
+      ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->unmake_move_c(__pyx_v_board); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 619, __pyx_L1_error)
 
-      /* "engine.pyx":613
+      /* "engine.pyx":620
  *         if not board.make_move_c(move):
  *             board.unmake_move_c()
  *             continue             # <<<<<<<<<<<<<<
  * 
  *         legal_moves_searched += 1
 */
-      goto __pyx_L48_continue;
+      goto __pyx_L51_continue;
 
-      /* "engine.pyx":611
+      /* "engine.pyx":618
  *         is_cap = flag == 3 or (board.piece_map[to_sq] != -1)
  * 
  *         if not board.make_move_c(move):             # <<<<<<<<<<<<<<
@@ -6465,7 +6543,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     }
 
-    /* "engine.pyx":615
+    /* "engine.pyx":622
  *             continue
  * 
  *         legal_moves_searched += 1             # <<<<<<<<<<<<<<
@@ -6474,37 +6552,39 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_legal_moves_searched = (__pyx_v_legal_moves_searched + 1);
 
-    /* "engine.pyx":617
+    /* "engine.pyx":624
  *         legal_moves_searched += 1
  * 
  *         if legal_moves_searched == 1:             # <<<<<<<<<<<<<<
- *             val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1)
+ *             val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)
  *         else:
 */
-    __pyx_t_9 = (__pyx_v_legal_moves_searched == 1);
-    if (__pyx_t_9) {
+    __pyx_t_7 = (__pyx_v_legal_moves_searched == 1);
+    if (__pyx_t_7) {
 
-      /* "engine.pyx":618
+      /* "engine.pyx":625
  * 
  *         if legal_moves_searched == 1:
- *             val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1)             # <<<<<<<<<<<<<<
+ *             val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)             # <<<<<<<<<<<<<<
  *         else:
  *             # --- Late Move Reductions (LMR) ---
 */
-      __pyx_t_12 = __pyx_f_9engine_cy_negamax(__pyx_v_board, (__pyx_v_depth - 1), (-__pyx_v_beta), (-__pyx_v_alpha), (-__pyx_v_color), (__pyx_v_ply + 1)); if (unlikely(__pyx_t_12 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 618, __pyx_L1_error)
-      __pyx_v_val = (-__pyx_t_12);
+      __pyx_t_10.__pyx_n = 1;
+      __pyx_t_10.extensions = (__pyx_v_extensions + __pyx_v_extended);
+      __pyx_t_13 = __pyx_f_9engine_cy_negamax(__pyx_v_board, (__pyx_v_depth - 1), (-__pyx_v_beta), (-__pyx_v_alpha), (-__pyx_v_color), (__pyx_v_ply + 1), &__pyx_t_10); if (unlikely(__pyx_t_13 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 625, __pyx_L1_error)
+      __pyx_v_val = (-__pyx_t_13);
 
-      /* "engine.pyx":617
+      /* "engine.pyx":624
  *         legal_moves_searched += 1
  * 
  *         if legal_moves_searched == 1:             # <<<<<<<<<<<<<<
- *             val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1)
+ *             val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)
  *         else:
 */
-      goto __pyx_L53;
+      goto __pyx_L56;
     }
 
-    /* "engine.pyx":621
+    /* "engine.pyx":628
  *         else:
  *             # --- Late Move Reductions (LMR) ---
  *             if (depth >= 2 and             # <<<<<<<<<<<<<<
@@ -6515,11 +6595,11 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
       __pyx_t_1 = (__pyx_v_depth >= 2);
       if (__pyx_t_1) {
       } else {
-        __pyx_t_9 = __pyx_t_1;
-        goto __pyx_L55_bool_binop_done;
+        __pyx_t_7 = __pyx_t_1;
+        goto __pyx_L58_bool_binop_done;
       }
 
-      /* "engine.pyx":622
+      /* "engine.pyx":629
  *             # --- Late Move Reductions (LMR) ---
  *             if (depth >= 2 and
  *                 legal_moves_searched > 4 and             # <<<<<<<<<<<<<<
@@ -6529,11 +6609,11 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
       __pyx_t_1 = (__pyx_v_legal_moves_searched > 4);
       if (__pyx_t_1) {
       } else {
-        __pyx_t_9 = __pyx_t_1;
-        goto __pyx_L55_bool_binop_done;
+        __pyx_t_7 = __pyx_t_1;
+        goto __pyx_L58_bool_binop_done;
       }
 
-      /* "engine.pyx":623
+      /* "engine.pyx":630
  *             if (depth >= 2 and
  *                 legal_moves_searched > 4 and
  *                 not is_cap and             # <<<<<<<<<<<<<<
@@ -6543,11 +6623,11 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
       __pyx_t_1 = (!__pyx_v_is_cap);
       if (__pyx_t_1) {
       } else {
-        __pyx_t_9 = __pyx_t_1;
-        goto __pyx_L55_bool_binop_done;
+        __pyx_t_7 = __pyx_t_1;
+        goto __pyx_L58_bool_binop_done;
       }
 
-      /* "engine.pyx":624
+      /* "engine.pyx":631
  *                 legal_moves_searched > 4 and
  *                 not is_cap and
  *                 flag < 8 and             # <<<<<<<<<<<<<<
@@ -6557,11 +6637,11 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
       __pyx_t_1 = (__pyx_v_flag < 8);
       if (__pyx_t_1) {
       } else {
-        __pyx_t_9 = __pyx_t_1;
-        goto __pyx_L55_bool_binop_done;
+        __pyx_t_7 = __pyx_t_1;
+        goto __pyx_L58_bool_binop_done;
       }
 
-      /* "engine.pyx":625
+      /* "engine.pyx":632
  *                 not is_cap and
  *                 flag < 8 and
  *                 not in_check):             # <<<<<<<<<<<<<<
@@ -6569,34 +6649,34 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
  *                 # Lookup reduction from precomputed table
 */
       __pyx_t_1 = (!__pyx_v_in_check);
-      __pyx_t_9 = __pyx_t_1;
-      __pyx_L55_bool_binop_done:;
+      __pyx_t_7 = __pyx_t_1;
+      __pyx_L58_bool_binop_done:;
 
-      /* "engine.pyx":621
+      /* "engine.pyx":628
  *         else:
  *             # --- Late Move Reductions (LMR) ---
  *             if (depth >= 2 and             # <<<<<<<<<<<<<<
  *                 legal_moves_searched > 4 and
  *                 not is_cap and
 */
-      if (__pyx_t_9) {
+      if (__pyx_t_7) {
 
-        /* "engine.pyx":628
+        /* "engine.pyx":635
  * 
  *                 # Lookup reduction from precomputed table
  *                 r_val = LMR_REDUCTIONS[depth][legal_moves_searched] if legal_moves_searched < 64 else LMR_REDUCTIONS[depth][63]             # <<<<<<<<<<<<<<
  *                 r_int = r_val // 1024
  * 
 */
-        __pyx_t_9 = (__pyx_v_legal_moves_searched < 64);
-        if (__pyx_t_9) {
-          __pyx_t_12 = ((__pyx_v_9engine_cy_LMR_REDUCTIONS[__pyx_v_depth])[__pyx_v_legal_moves_searched]);
+        __pyx_t_7 = (__pyx_v_legal_moves_searched < 64);
+        if (__pyx_t_7) {
+          __pyx_t_13 = ((__pyx_v_9engine_cy_LMR_REDUCTIONS[__pyx_v_depth])[__pyx_v_legal_moves_searched]);
         } else {
-          __pyx_t_12 = ((__pyx_v_9engine_cy_LMR_REDUCTIONS[__pyx_v_depth])[63]);
+          __pyx_t_13 = ((__pyx_v_9engine_cy_LMR_REDUCTIONS[__pyx_v_depth])[63]);
         }
-        __pyx_v_r_val = __pyx_t_12;
+        __pyx_v_r_val = __pyx_t_13;
 
-        /* "engine.pyx":629
+        /* "engine.pyx":636
  *                 # Lookup reduction from precomputed table
  *                 r_val = LMR_REDUCTIONS[depth][legal_moves_searched] if legal_moves_searched < 64 else LMR_REDUCTIONS[depth][63]
  *                 r_int = r_val // 1024             # <<<<<<<<<<<<<<
@@ -6605,7 +6685,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         __pyx_v_r_int = (__pyx_v_r_val / 0x400);
 
-        /* "engine.pyx":632
+        /* "engine.pyx":639
  * 
  *                 # Reductions tuning
  *                 if pv_node:             # <<<<<<<<<<<<<<
@@ -6614,7 +6694,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         if (__pyx_v_pv_node) {
 
-          /* "engine.pyx":633
+          /* "engine.pyx":640
  *                 # Reductions tuning
  *                 if pv_node:
  *                     r_int -= 1             # <<<<<<<<<<<<<<
@@ -6623,7 +6703,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
           __pyx_v_r_int = (__pyx_v_r_int - 1);
 
-          /* "engine.pyx":632
+          /* "engine.pyx":639
  * 
  *                 # Reductions tuning
  *                 if pv_node:             # <<<<<<<<<<<<<<
@@ -6632,7 +6712,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         }
 
-        /* "engine.pyx":634
+        /* "engine.pyx":641
  *                 if pv_node:
  *                     r_int -= 1
  *                 if move == killer_moves[0][ply] or move == killer_moves[1][ply]:             # <<<<<<<<<<<<<<
@@ -6642,15 +6722,15 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
         __pyx_t_1 = (__pyx_v_move == ((__pyx_v_9engine_cy_killer_moves[0])[__pyx_v_ply]));
         if (!__pyx_t_1) {
         } else {
-          __pyx_t_9 = __pyx_t_1;
-          goto __pyx_L62_bool_binop_done;
+          __pyx_t_7 = __pyx_t_1;
+          goto __pyx_L65_bool_binop_done;
         }
         __pyx_t_1 = (__pyx_v_move == ((__pyx_v_9engine_cy_killer_moves[1])[__pyx_v_ply]));
-        __pyx_t_9 = __pyx_t_1;
-        __pyx_L62_bool_binop_done:;
-        if (__pyx_t_9) {
+        __pyx_t_7 = __pyx_t_1;
+        __pyx_L65_bool_binop_done:;
+        if (__pyx_t_7) {
 
-          /* "engine.pyx":635
+          /* "engine.pyx":642
  *                     r_int -= 1
  *                 if move == killer_moves[0][ply] or move == killer_moves[1][ply]:
  *                     r_int -= 1             # <<<<<<<<<<<<<<
@@ -6659,7 +6739,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
           __pyx_v_r_int = (__pyx_v_r_int - 1);
 
-          /* "engine.pyx":634
+          /* "engine.pyx":641
  *                 if pv_node:
  *                     r_int -= 1
  *                 if move == killer_moves[0][ply] or move == killer_moves[1][ply]:             # <<<<<<<<<<<<<<
@@ -6668,7 +6748,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         }
 
-        /* "engine.pyx":637
+        /* "engine.pyx":644
  *                     r_int -= 1
  * 
  *                 p_type = board.piece_map[to_sq] # the piece is already moved to to_sq             # <<<<<<<<<<<<<<
@@ -6677,27 +6757,27 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         __pyx_v_p_type = (__pyx_v_board->piece_map[__pyx_v_to_sq]);
 
-        /* "engine.pyx":638
+        /* "engine.pyx":645
  * 
  *                 p_type = board.piece_map[to_sq] # the piece is already moved to to_sq
  *                 if p_type != -1:             # <<<<<<<<<<<<<<
  *                     if history_moves[p_type][to_sq] > 2000:
  *                         r_int -= 1
 */
-        __pyx_t_9 = (__pyx_v_p_type != -1L);
-        if (__pyx_t_9) {
+        __pyx_t_7 = (__pyx_v_p_type != -1L);
+        if (__pyx_t_7) {
 
-          /* "engine.pyx":639
+          /* "engine.pyx":646
  *                 p_type = board.piece_map[to_sq] # the piece is already moved to to_sq
  *                 if p_type != -1:
  *                     if history_moves[p_type][to_sq] > 2000:             # <<<<<<<<<<<<<<
  *                         r_int -= 1
  *                     elif history_moves[p_type][to_sq] < 500:
 */
-          __pyx_t_9 = (((__pyx_v_9engine_cy_history_moves[__pyx_v_p_type])[__pyx_v_to_sq]) > 0x7D0);
-          if (__pyx_t_9) {
+          __pyx_t_7 = (((__pyx_v_9engine_cy_history_moves[__pyx_v_p_type])[__pyx_v_to_sq]) > 0x7D0);
+          if (__pyx_t_7) {
 
-            /* "engine.pyx":640
+            /* "engine.pyx":647
  *                 if p_type != -1:
  *                     if history_moves[p_type][to_sq] > 2000:
  *                         r_int -= 1             # <<<<<<<<<<<<<<
@@ -6706,27 +6786,27 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
             __pyx_v_r_int = (__pyx_v_r_int - 1);
 
-            /* "engine.pyx":639
+            /* "engine.pyx":646
  *                 p_type = board.piece_map[to_sq] # the piece is already moved to to_sq
  *                 if p_type != -1:
  *                     if history_moves[p_type][to_sq] > 2000:             # <<<<<<<<<<<<<<
  *                         r_int -= 1
  *                     elif history_moves[p_type][to_sq] < 500:
 */
-            goto __pyx_L65;
+            goto __pyx_L68;
           }
 
-          /* "engine.pyx":641
+          /* "engine.pyx":648
  *                     if history_moves[p_type][to_sq] > 2000:
  *                         r_int -= 1
  *                     elif history_moves[p_type][to_sq] < 500:             # <<<<<<<<<<<<<<
  *                         r_int += 1
  * 
 */
-          __pyx_t_9 = (((__pyx_v_9engine_cy_history_moves[__pyx_v_p_type])[__pyx_v_to_sq]) < 0x1F4);
-          if (__pyx_t_9) {
+          __pyx_t_7 = (((__pyx_v_9engine_cy_history_moves[__pyx_v_p_type])[__pyx_v_to_sq]) < 0x1F4);
+          if (__pyx_t_7) {
 
-            /* "engine.pyx":642
+            /* "engine.pyx":649
  *                         r_int -= 1
  *                     elif history_moves[p_type][to_sq] < 500:
  *                         r_int += 1             # <<<<<<<<<<<<<<
@@ -6735,7 +6815,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
             __pyx_v_r_int = (__pyx_v_r_int + 1);
 
-            /* "engine.pyx":641
+            /* "engine.pyx":648
  *                     if history_moves[p_type][to_sq] > 2000:
  *                         r_int -= 1
  *                     elif history_moves[p_type][to_sq] < 500:             # <<<<<<<<<<<<<<
@@ -6743,9 +6823,9 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
  * 
 */
           }
-          __pyx_L65:;
+          __pyx_L68:;
 
-          /* "engine.pyx":638
+          /* "engine.pyx":645
  * 
  *                 p_type = board.piece_map[to_sq] # the piece is already moved to to_sq
  *                 if p_type != -1:             # <<<<<<<<<<<<<<
@@ -6754,17 +6834,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         }
 
-        /* "engine.pyx":644
+        /* "engine.pyx":651
  *                         r_int += 1
  * 
  *                 if r_int < 1:             # <<<<<<<<<<<<<<
  *                     r_int = 1
  *                 if r_int >= depth:
 */
-        __pyx_t_9 = (__pyx_v_r_int < 1);
-        if (__pyx_t_9) {
+        __pyx_t_7 = (__pyx_v_r_int < 1);
+        if (__pyx_t_7) {
 
-          /* "engine.pyx":645
+          /* "engine.pyx":652
  * 
  *                 if r_int < 1:
  *                     r_int = 1             # <<<<<<<<<<<<<<
@@ -6773,7 +6853,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
           __pyx_v_r_int = 1;
 
-          /* "engine.pyx":644
+          /* "engine.pyx":651
  *                         r_int += 1
  * 
  *                 if r_int < 1:             # <<<<<<<<<<<<<<
@@ -6782,17 +6862,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         }
 
-        /* "engine.pyx":646
+        /* "engine.pyx":653
  *                 if r_int < 1:
  *                     r_int = 1
  *                 if r_int >= depth:             # <<<<<<<<<<<<<<
  *                     r_int = depth - 1
  * 
 */
-        __pyx_t_9 = (__pyx_v_r_int >= __pyx_v_depth);
-        if (__pyx_t_9) {
+        __pyx_t_7 = (__pyx_v_r_int >= __pyx_v_depth);
+        if (__pyx_t_7) {
 
-          /* "engine.pyx":647
+          /* "engine.pyx":654
  *                     r_int = 1
  *                 if r_int >= depth:
  *                     r_int = depth - 1             # <<<<<<<<<<<<<<
@@ -6801,7 +6881,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
           __pyx_v_r_int = (__pyx_v_depth - 1);
 
-          /* "engine.pyx":646
+          /* "engine.pyx":653
  *                 if r_int < 1:
  *                     r_int = 1
  *                 if r_int >= depth:             # <<<<<<<<<<<<<<
@@ -6810,125 +6890,133 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         }
 
-        /* "engine.pyx":650
+        /* "engine.pyx":657
  * 
  *                 # Search at reduced depth with null window
- *                 val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1)             # <<<<<<<<<<<<<<
+ *                 val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)             # <<<<<<<<<<<<<<
  * 
  *                 # Re-search at full depth with null window if reduced search failed high
 */
-        __pyx_t_12 = __pyx_f_9engine_cy_negamax(__pyx_v_board, ((__pyx_v_depth - 1) - __pyx_v_r_int), ((-__pyx_v_alpha) - 1), (-__pyx_v_alpha), (-__pyx_v_color), (__pyx_v_ply + 1)); if (unlikely(__pyx_t_12 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 650, __pyx_L1_error)
-        __pyx_v_val = (-__pyx_t_12);
+        __pyx_t_10.__pyx_n = 1;
+        __pyx_t_10.extensions = (__pyx_v_extensions + __pyx_v_extended);
+        __pyx_t_13 = __pyx_f_9engine_cy_negamax(__pyx_v_board, ((__pyx_v_depth - 1) - __pyx_v_r_int), ((-__pyx_v_alpha) - 1), (-__pyx_v_alpha), (-__pyx_v_color), (__pyx_v_ply + 1), &__pyx_t_10); if (unlikely(__pyx_t_13 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 657, __pyx_L1_error)
+        __pyx_v_val = (-__pyx_t_13);
 
-        /* "engine.pyx":653
+        /* "engine.pyx":660
  * 
  *                 # Re-search at full depth with null window if reduced search failed high
  *                 if val > alpha and r_int > 0:             # <<<<<<<<<<<<<<
- *                     val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1)
+ *                     val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)
  *             else:
 */
         __pyx_t_1 = (__pyx_v_val > __pyx_v_alpha);
         if (__pyx_t_1) {
         } else {
-          __pyx_t_9 = __pyx_t_1;
-          goto __pyx_L69_bool_binop_done;
+          __pyx_t_7 = __pyx_t_1;
+          goto __pyx_L72_bool_binop_done;
         }
         __pyx_t_1 = (__pyx_v_r_int > 0);
-        __pyx_t_9 = __pyx_t_1;
-        __pyx_L69_bool_binop_done:;
-        if (__pyx_t_9) {
+        __pyx_t_7 = __pyx_t_1;
+        __pyx_L72_bool_binop_done:;
+        if (__pyx_t_7) {
 
-          /* "engine.pyx":654
+          /* "engine.pyx":661
  *                 # Re-search at full depth with null window if reduced search failed high
  *                 if val > alpha and r_int > 0:
- *                     val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1)             # <<<<<<<<<<<<<<
+ *                     val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)             # <<<<<<<<<<<<<<
  *             else:
  *                 # Search at full depth with null window
 */
-          __pyx_t_12 = __pyx_f_9engine_cy_negamax(__pyx_v_board, (__pyx_v_depth - 1), ((-__pyx_v_alpha) - 1), (-__pyx_v_alpha), (-__pyx_v_color), (__pyx_v_ply + 1)); if (unlikely(__pyx_t_12 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 654, __pyx_L1_error)
-          __pyx_v_val = (-__pyx_t_12);
+          __pyx_t_10.__pyx_n = 1;
+          __pyx_t_10.extensions = (__pyx_v_extensions + __pyx_v_extended);
+          __pyx_t_13 = __pyx_f_9engine_cy_negamax(__pyx_v_board, (__pyx_v_depth - 1), ((-__pyx_v_alpha) - 1), (-__pyx_v_alpha), (-__pyx_v_color), (__pyx_v_ply + 1), &__pyx_t_10); if (unlikely(__pyx_t_13 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 661, __pyx_L1_error)
+          __pyx_v_val = (-__pyx_t_13);
 
-          /* "engine.pyx":653
+          /* "engine.pyx":660
  * 
  *                 # Re-search at full depth with null window if reduced search failed high
  *                 if val > alpha and r_int > 0:             # <<<<<<<<<<<<<<
- *                     val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1)
+ *                     val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)
  *             else:
 */
         }
 
-        /* "engine.pyx":621
+        /* "engine.pyx":628
  *         else:
  *             # --- Late Move Reductions (LMR) ---
  *             if (depth >= 2 and             # <<<<<<<<<<<<<<
  *                 legal_moves_searched > 4 and
  *                 not is_cap and
 */
-        goto __pyx_L54;
+        goto __pyx_L57;
       }
 
-      /* "engine.pyx":657
+      /* "engine.pyx":664
  *             else:
  *                 # Search at full depth with null window
- *                 val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1)             # <<<<<<<<<<<<<<
+ *                 val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)             # <<<<<<<<<<<<<<
  * 
  *             # Re-search with full window if null window search failed high
 */
       /*else*/ {
-        __pyx_t_12 = __pyx_f_9engine_cy_negamax(__pyx_v_board, (__pyx_v_depth - 1), ((-__pyx_v_alpha) - 1), (-__pyx_v_alpha), (-__pyx_v_color), (__pyx_v_ply + 1)); if (unlikely(__pyx_t_12 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 657, __pyx_L1_error)
-        __pyx_v_val = (-__pyx_t_12);
+        __pyx_t_10.__pyx_n = 1;
+        __pyx_t_10.extensions = (__pyx_v_extensions + __pyx_v_extended);
+        __pyx_t_13 = __pyx_f_9engine_cy_negamax(__pyx_v_board, (__pyx_v_depth - 1), ((-__pyx_v_alpha) - 1), (-__pyx_v_alpha), (-__pyx_v_color), (__pyx_v_ply + 1), &__pyx_t_10); if (unlikely(__pyx_t_13 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 664, __pyx_L1_error)
+        __pyx_v_val = (-__pyx_t_13);
       }
-      __pyx_L54:;
+      __pyx_L57:;
 
-      /* "engine.pyx":660
+      /* "engine.pyx":667
  * 
  *             # Re-search with full window if null window search failed high
  *             if val > alpha and val < beta:             # <<<<<<<<<<<<<<
- *                 val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1)
+ *                 val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)
  * 
 */
       __pyx_t_1 = (__pyx_v_val > __pyx_v_alpha);
       if (__pyx_t_1) {
       } else {
-        __pyx_t_9 = __pyx_t_1;
-        goto __pyx_L72_bool_binop_done;
+        __pyx_t_7 = __pyx_t_1;
+        goto __pyx_L75_bool_binop_done;
       }
       __pyx_t_1 = (__pyx_v_val < __pyx_v_beta);
-      __pyx_t_9 = __pyx_t_1;
-      __pyx_L72_bool_binop_done:;
-      if (__pyx_t_9) {
+      __pyx_t_7 = __pyx_t_1;
+      __pyx_L75_bool_binop_done:;
+      if (__pyx_t_7) {
 
-        /* "engine.pyx":661
+        /* "engine.pyx":668
  *             # Re-search with full window if null window search failed high
  *             if val > alpha and val < beta:
- *                 val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1)             # <<<<<<<<<<<<<<
+ *                 val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)             # <<<<<<<<<<<<<<
  * 
  *         board.unmake_move_c()
 */
-        __pyx_t_12 = __pyx_f_9engine_cy_negamax(__pyx_v_board, (__pyx_v_depth - 1), (-__pyx_v_beta), (-__pyx_v_alpha), (-__pyx_v_color), (__pyx_v_ply + 1)); if (unlikely(__pyx_t_12 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 661, __pyx_L1_error)
-        __pyx_v_val = (-__pyx_t_12);
+        __pyx_t_10.__pyx_n = 1;
+        __pyx_t_10.extensions = (__pyx_v_extensions + __pyx_v_extended);
+        __pyx_t_13 = __pyx_f_9engine_cy_negamax(__pyx_v_board, (__pyx_v_depth - 1), (-__pyx_v_beta), (-__pyx_v_alpha), (-__pyx_v_color), (__pyx_v_ply + 1), &__pyx_t_10); if (unlikely(__pyx_t_13 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 668, __pyx_L1_error)
+        __pyx_v_val = (-__pyx_t_13);
 
-        /* "engine.pyx":660
+        /* "engine.pyx":667
  * 
  *             # Re-search with full window if null window search failed high
  *             if val > alpha and val < beta:             # <<<<<<<<<<<<<<
- *                 val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1)
+ *                 val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)
  * 
 */
       }
     }
-    __pyx_L53:;
+    __pyx_L56:;
 
-    /* "engine.pyx":663
- *                 val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1)
+    /* "engine.pyx":670
+ *                 val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)
  * 
  *         board.unmake_move_c()             # <<<<<<<<<<<<<<
  * 
  *         if info.stop:
 */
-    ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->unmake_move_c(__pyx_v_board); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 663, __pyx_L1_error)
+    ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->unmake_move_c(__pyx_v_board); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 670, __pyx_L1_error)
 
-    /* "engine.pyx":665
+    /* "engine.pyx":672
  *         board.unmake_move_c()
  * 
  *         if info.stop:             # <<<<<<<<<<<<<<
@@ -6937,7 +7025,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     if (__pyx_v_9engine_cy_info.stop) {
 
-      /* "engine.pyx":666
+      /* "engine.pyx":673
  * 
  *         if info.stop:
  *             return 0             # <<<<<<<<<<<<<<
@@ -6947,7 +7035,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
       __pyx_r = 0;
       goto __pyx_L0;
 
-      /* "engine.pyx":665
+      /* "engine.pyx":672
  *         board.unmake_move_c()
  * 
  *         if info.stop:             # <<<<<<<<<<<<<<
@@ -6956,17 +7044,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     }
 
-    /* "engine.pyx":668
+    /* "engine.pyx":675
  *             return 0
  * 
  *         if val > best_val:             # <<<<<<<<<<<<<<
  *             best_val = val
  *             best_move = move
 */
-    __pyx_t_9 = (__pyx_v_val > __pyx_v_best_val);
-    if (__pyx_t_9) {
+    __pyx_t_7 = (__pyx_v_val > __pyx_v_best_val);
+    if (__pyx_t_7) {
 
-      /* "engine.pyx":669
+      /* "engine.pyx":676
  * 
  *         if val > best_val:
  *             best_val = val             # <<<<<<<<<<<<<<
@@ -6975,7 +7063,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       __pyx_v_best_val = __pyx_v_val;
 
-      /* "engine.pyx":670
+      /* "engine.pyx":677
  *         if val > best_val:
  *             best_val = val
  *             best_move = move             # <<<<<<<<<<<<<<
@@ -6984,17 +7072,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       __pyx_v_best_move = __pyx_v_move;
 
-      /* "engine.pyx":671
+      /* "engine.pyx":678
  *             best_val = val
  *             best_move = move
  *             if ply == 0:             # <<<<<<<<<<<<<<
  *                 info.root_best_move = move
  * 
 */
-      __pyx_t_9 = (__pyx_v_ply == 0);
-      if (__pyx_t_9) {
+      __pyx_t_7 = (__pyx_v_ply == 0);
+      if (__pyx_t_7) {
 
-        /* "engine.pyx":672
+        /* "engine.pyx":679
  *             best_move = move
  *             if ply == 0:
  *                 info.root_best_move = move             # <<<<<<<<<<<<<<
@@ -7003,7 +7091,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         __pyx_v_9engine_cy_info.root_best_move = __pyx_v_move;
 
-        /* "engine.pyx":671
+        /* "engine.pyx":678
  *             best_val = val
  *             best_move = move
  *             if ply == 0:             # <<<<<<<<<<<<<<
@@ -7012,7 +7100,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       }
 
-      /* "engine.pyx":668
+      /* "engine.pyx":675
  *             return 0
  * 
  *         if val > best_val:             # <<<<<<<<<<<<<<
@@ -7021,17 +7109,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     }
 
-    /* "engine.pyx":674
+    /* "engine.pyx":681
  *                 info.root_best_move = move
  * 
  *         if val > alpha:             # <<<<<<<<<<<<<<
  *             alpha = val
  * 
 */
-    __pyx_t_9 = (__pyx_v_val > __pyx_v_alpha);
-    if (__pyx_t_9) {
+    __pyx_t_7 = (__pyx_v_val > __pyx_v_alpha);
+    if (__pyx_t_7) {
 
-      /* "engine.pyx":675
+      /* "engine.pyx":682
  * 
  *         if val > alpha:
  *             alpha = val             # <<<<<<<<<<<<<<
@@ -7040,7 +7128,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       __pyx_v_alpha = __pyx_v_val;
 
-      /* "engine.pyx":674
+      /* "engine.pyx":681
  *                 info.root_best_move = move
  * 
  *         if val > alpha:             # <<<<<<<<<<<<<<
@@ -7049,17 +7137,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     }
 
-    /* "engine.pyx":677
+    /* "engine.pyx":684
  *             alpha = val
  * 
  *         if alpha >= beta:             # <<<<<<<<<<<<<<
  *             # Beta cutoff: update Killer & History heuristics for quiet moves
  *             if not is_cap and flag < 8:
 */
-    __pyx_t_9 = (__pyx_v_alpha >= __pyx_v_beta);
-    if (__pyx_t_9) {
+    __pyx_t_7 = (__pyx_v_alpha >= __pyx_v_beta);
+    if (__pyx_t_7) {
 
-      /* "engine.pyx":679
+      /* "engine.pyx":686
  *         if alpha >= beta:
  *             # Beta cutoff: update Killer & History heuristics for quiet moves
  *             if not is_cap and flag < 8:             # <<<<<<<<<<<<<<
@@ -7069,25 +7157,25 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
       __pyx_t_1 = (!__pyx_v_is_cap);
       if (__pyx_t_1) {
       } else {
-        __pyx_t_9 = __pyx_t_1;
-        goto __pyx_L80_bool_binop_done;
+        __pyx_t_7 = __pyx_t_1;
+        goto __pyx_L83_bool_binop_done;
       }
       __pyx_t_1 = (__pyx_v_flag < 8);
-      __pyx_t_9 = __pyx_t_1;
-      __pyx_L80_bool_binop_done:;
-      if (__pyx_t_9) {
+      __pyx_t_7 = __pyx_t_1;
+      __pyx_L83_bool_binop_done:;
+      if (__pyx_t_7) {
 
-        /* "engine.pyx":680
+        /* "engine.pyx":687
  *             # Beta cutoff: update Killer & History heuristics for quiet moves
  *             if not is_cap and flag < 8:
  *                 if killer_moves[0][ply] != move:             # <<<<<<<<<<<<<<
  *                     killer_moves[1][ply] = killer_moves[0][ply]
  *                     killer_moves[0][ply] = move
 */
-        __pyx_t_9 = (((__pyx_v_9engine_cy_killer_moves[0])[__pyx_v_ply]) != __pyx_v_move);
-        if (__pyx_t_9) {
+        __pyx_t_7 = (((__pyx_v_9engine_cy_killer_moves[0])[__pyx_v_ply]) != __pyx_v_move);
+        if (__pyx_t_7) {
 
-          /* "engine.pyx":681
+          /* "engine.pyx":688
  *             if not is_cap and flag < 8:
  *                 if killer_moves[0][ply] != move:
  *                     killer_moves[1][ply] = killer_moves[0][ply]             # <<<<<<<<<<<<<<
@@ -7096,7 +7184,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
           ((__pyx_v_9engine_cy_killer_moves[1])[__pyx_v_ply]) = ((__pyx_v_9engine_cy_killer_moves[0])[__pyx_v_ply]);
 
-          /* "engine.pyx":682
+          /* "engine.pyx":689
  *                 if killer_moves[0][ply] != move:
  *                     killer_moves[1][ply] = killer_moves[0][ply]
  *                     killer_moves[0][ply] = move             # <<<<<<<<<<<<<<
@@ -7105,7 +7193,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
           ((__pyx_v_9engine_cy_killer_moves[0])[__pyx_v_ply]) = __pyx_v_move;
 
-          /* "engine.pyx":680
+          /* "engine.pyx":687
  *             # Beta cutoff: update Killer & History heuristics for quiet moves
  *             if not is_cap and flag < 8:
  *                 if killer_moves[0][ply] != move:             # <<<<<<<<<<<<<<
@@ -7114,7 +7202,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         }
 
-        /* "engine.pyx":684
+        /* "engine.pyx":691
  *                     killer_moves[0][ply] = move
  * 
  *                 p_type = board.piece_map[from_sq]             # <<<<<<<<<<<<<<
@@ -7123,38 +7211,38 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         __pyx_v_p_type = (__pyx_v_board->piece_map[__pyx_v_from_sq]);
 
-        /* "engine.pyx":685
+        /* "engine.pyx":692
  * 
  *                 p_type = board.piece_map[from_sq]
  *                 if p_type != -1:             # <<<<<<<<<<<<<<
  *                     history_moves[p_type][to_sq] += depth * depth
  *                     if history_moves[p_type][to_sq] > 5000:
 */
-        __pyx_t_9 = (__pyx_v_p_type != -1L);
-        if (__pyx_t_9) {
+        __pyx_t_7 = (__pyx_v_p_type != -1L);
+        if (__pyx_t_7) {
 
-          /* "engine.pyx":686
+          /* "engine.pyx":693
  *                 p_type = board.piece_map[from_sq]
  *                 if p_type != -1:
  *                     history_moves[p_type][to_sq] += depth * depth             # <<<<<<<<<<<<<<
  *                     if history_moves[p_type][to_sq] > 5000:
  *                         history_moves[p_type][to_sq] = 5000
 */
-          __pyx_t_12 = __pyx_v_p_type;
-          __pyx_t_13 = __pyx_v_to_sq;
-          ((__pyx_v_9engine_cy_history_moves[__pyx_t_12])[__pyx_t_13]) = (((__pyx_v_9engine_cy_history_moves[__pyx_t_12])[__pyx_t_13]) + (__pyx_v_depth * __pyx_v_depth));
+          __pyx_t_13 = __pyx_v_p_type;
+          __pyx_t_14 = __pyx_v_to_sq;
+          ((__pyx_v_9engine_cy_history_moves[__pyx_t_13])[__pyx_t_14]) = (((__pyx_v_9engine_cy_history_moves[__pyx_t_13])[__pyx_t_14]) + (__pyx_v_depth * __pyx_v_depth));
 
-          /* "engine.pyx":687
+          /* "engine.pyx":694
  *                 if p_type != -1:
  *                     history_moves[p_type][to_sq] += depth * depth
  *                     if history_moves[p_type][to_sq] > 5000:             # <<<<<<<<<<<<<<
  *                         history_moves[p_type][to_sq] = 5000
  *             break
 */
-          __pyx_t_9 = (((__pyx_v_9engine_cy_history_moves[__pyx_v_p_type])[__pyx_v_to_sq]) > 0x1388);
-          if (__pyx_t_9) {
+          __pyx_t_7 = (((__pyx_v_9engine_cy_history_moves[__pyx_v_p_type])[__pyx_v_to_sq]) > 0x1388);
+          if (__pyx_t_7) {
 
-            /* "engine.pyx":688
+            /* "engine.pyx":695
  *                     history_moves[p_type][to_sq] += depth * depth
  *                     if history_moves[p_type][to_sq] > 5000:
  *                         history_moves[p_type][to_sq] = 5000             # <<<<<<<<<<<<<<
@@ -7163,7 +7251,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
             ((__pyx_v_9engine_cy_history_moves[__pyx_v_p_type])[__pyx_v_to_sq]) = 0x1388;
 
-            /* "engine.pyx":687
+            /* "engine.pyx":694
  *                 if p_type != -1:
  *                     history_moves[p_type][to_sq] += depth * depth
  *                     if history_moves[p_type][to_sq] > 5000:             # <<<<<<<<<<<<<<
@@ -7172,7 +7260,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
           }
 
-          /* "engine.pyx":685
+          /* "engine.pyx":692
  * 
  *                 p_type = board.piece_map[from_sq]
  *                 if p_type != -1:             # <<<<<<<<<<<<<<
@@ -7181,7 +7269,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
         }
 
-        /* "engine.pyx":679
+        /* "engine.pyx":686
  *         if alpha >= beta:
  *             # Beta cutoff: update Killer & History heuristics for quiet moves
  *             if not is_cap and flag < 8:             # <<<<<<<<<<<<<<
@@ -7190,16 +7278,16 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
       }
 
-      /* "engine.pyx":689
+      /* "engine.pyx":696
  *                     if history_moves[p_type][to_sq] > 5000:
  *                         history_moves[p_type][to_sq] = 5000
  *             break             # <<<<<<<<<<<<<<
  * 
  *     if info.stop:
 */
-      goto __pyx_L49_break;
+      goto __pyx_L52_break;
 
-      /* "engine.pyx":677
+      /* "engine.pyx":684
  *             alpha = val
  * 
  *         if alpha >= beta:             # <<<<<<<<<<<<<<
@@ -7207,11 +7295,11 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
  *             if not is_cap and flag < 8:
 */
     }
-    __pyx_L48_continue:;
+    __pyx_L51_continue:;
   }
-  __pyx_L49_break:;
+  __pyx_L52_break:;
 
-  /* "engine.pyx":691
+  /* "engine.pyx":698
  *             break
  * 
  *     if info.stop:             # <<<<<<<<<<<<<<
@@ -7220,7 +7308,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   if (__pyx_v_9engine_cy_info.stop) {
 
-    /* "engine.pyx":692
+    /* "engine.pyx":699
  * 
  *     if info.stop:
  *         return 0             # <<<<<<<<<<<<<<
@@ -7230,7 +7318,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
     __pyx_r = 0;
     goto __pyx_L0;
 
-    /* "engine.pyx":691
+    /* "engine.pyx":698
  *             break
  * 
  *     if info.stop:             # <<<<<<<<<<<<<<
@@ -7239,27 +7327,27 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   }
 
-  /* "engine.pyx":694
+  /* "engine.pyx":701
  *         return 0
  * 
  *     if legal_moves_searched == 0:             # <<<<<<<<<<<<<<
  *         if board.in_check():
  *             return -99999 + ply
 */
-  __pyx_t_9 = (__pyx_v_legal_moves_searched == 0);
-  if (__pyx_t_9) {
+  __pyx_t_7 = (__pyx_v_legal_moves_searched == 0);
+  if (__pyx_t_7) {
 
-    /* "engine.pyx":695
+    /* "engine.pyx":702
  * 
  *     if legal_moves_searched == 0:
  *         if board.in_check():             # <<<<<<<<<<<<<<
  *             return -99999 + ply
  *         return 0
 */
-    __pyx_t_9 = ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->in_check(__pyx_v_board, 0); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 695, __pyx_L1_error)
-    if (__pyx_t_9) {
+    __pyx_t_7 = ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->in_check(__pyx_v_board, 0); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 702, __pyx_L1_error)
+    if (__pyx_t_7) {
 
-      /* "engine.pyx":696
+      /* "engine.pyx":703
  *     if legal_moves_searched == 0:
  *         if board.in_check():
  *             return -99999 + ply             # <<<<<<<<<<<<<<
@@ -7269,7 +7357,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
       __pyx_r = (-99999L + __pyx_v_ply);
       goto __pyx_L0;
 
-      /* "engine.pyx":695
+      /* "engine.pyx":702
  * 
  *     if legal_moves_searched == 0:
  *         if board.in_check():             # <<<<<<<<<<<<<<
@@ -7278,7 +7366,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     }
 
-    /* "engine.pyx":697
+    /* "engine.pyx":704
  *         if board.in_check():
  *             return -99999 + ply
  *         return 0             # <<<<<<<<<<<<<<
@@ -7288,7 +7376,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
     __pyx_r = 0;
     goto __pyx_L0;
 
-    /* "engine.pyx":694
+    /* "engine.pyx":701
  *         return 0
  * 
  *     if legal_moves_searched == 0:             # <<<<<<<<<<<<<<
@@ -7297,7 +7385,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   }
 
-  /* "engine.pyx":699
+  /* "engine.pyx":706
  *         return 0
  * 
  *     cdef int tt_flag = 0             # <<<<<<<<<<<<<<
@@ -7306,17 +7394,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   __pyx_v_tt_flag = 0;
 
-  /* "engine.pyx":700
+  /* "engine.pyx":707
  * 
  *     cdef int tt_flag = 0
  *     if best_val <= alpha_orig:             # <<<<<<<<<<<<<<
  *         tt_flag = 2
  *     elif best_val >= beta:
 */
-  __pyx_t_9 = (__pyx_v_best_val <= __pyx_v_alpha_orig);
-  if (__pyx_t_9) {
+  __pyx_t_7 = (__pyx_v_best_val <= __pyx_v_alpha_orig);
+  if (__pyx_t_7) {
 
-    /* "engine.pyx":701
+    /* "engine.pyx":708
  *     cdef int tt_flag = 0
  *     if best_val <= alpha_orig:
  *         tt_flag = 2             # <<<<<<<<<<<<<<
@@ -7325,27 +7413,27 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_tt_flag = 2;
 
-    /* "engine.pyx":700
+    /* "engine.pyx":707
  * 
  *     cdef int tt_flag = 0
  *     if best_val <= alpha_orig:             # <<<<<<<<<<<<<<
  *         tt_flag = 2
  *     elif best_val >= beta:
 */
-    goto __pyx_L88;
+    goto __pyx_L91;
   }
 
-  /* "engine.pyx":702
+  /* "engine.pyx":709
  *     if best_val <= alpha_orig:
  *         tt_flag = 2
  *     elif best_val >= beta:             # <<<<<<<<<<<<<<
  *         tt_flag = 1
  * 
 */
-  __pyx_t_9 = (__pyx_v_best_val >= __pyx_v_beta);
-  if (__pyx_t_9) {
+  __pyx_t_7 = (__pyx_v_best_val >= __pyx_v_beta);
+  if (__pyx_t_7) {
 
-    /* "engine.pyx":703
+    /* "engine.pyx":710
  *         tt_flag = 2
  *     elif best_val >= beta:
  *         tt_flag = 1             # <<<<<<<<<<<<<<
@@ -7354,7 +7442,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_tt_flag = 1;
 
-    /* "engine.pyx":702
+    /* "engine.pyx":709
  *     if best_val <= alpha_orig:
  *         tt_flag = 2
  *     elif best_val >= beta:             # <<<<<<<<<<<<<<
@@ -7362,9 +7450,9 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
  * 
 */
   }
-  __pyx_L88:;
+  __pyx_L91:;
 
-  /* "engine.pyx":705
+  /* "engine.pyx":712
  *         tt_flag = 1
  * 
  *     tt_val = best_val             # <<<<<<<<<<<<<<
@@ -7373,17 +7461,17 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   __pyx_v_tt_val = __pyx_v_best_val;
 
-  /* "engine.pyx":706
+  /* "engine.pyx":713
  * 
  *     tt_val = best_val
  *     if tt_val > MATE_THRESHOLD:             # <<<<<<<<<<<<<<
  *         tt_val += ply
  *     elif tt_val < -MATE_THRESHOLD:
 */
-  __pyx_t_9 = (__pyx_v_tt_val > __pyx_v_9engine_cy_MATE_THRESHOLD);
-  if (__pyx_t_9) {
+  __pyx_t_7 = (__pyx_v_tt_val > __pyx_v_9engine_cy_MATE_THRESHOLD);
+  if (__pyx_t_7) {
 
-    /* "engine.pyx":707
+    /* "engine.pyx":714
  *     tt_val = best_val
  *     if tt_val > MATE_THRESHOLD:
  *         tt_val += ply             # <<<<<<<<<<<<<<
@@ -7392,27 +7480,27 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_tt_val = (__pyx_v_tt_val + __pyx_v_ply);
 
-    /* "engine.pyx":706
+    /* "engine.pyx":713
  * 
  *     tt_val = best_val
  *     if tt_val > MATE_THRESHOLD:             # <<<<<<<<<<<<<<
  *         tt_val += ply
  *     elif tt_val < -MATE_THRESHOLD:
 */
-    goto __pyx_L89;
+    goto __pyx_L92;
   }
 
-  /* "engine.pyx":708
+  /* "engine.pyx":715
  *     if tt_val > MATE_THRESHOLD:
  *         tt_val += ply
  *     elif tt_val < -MATE_THRESHOLD:             # <<<<<<<<<<<<<<
  *         tt_val -= ply
  * 
 */
-  __pyx_t_9 = (__pyx_v_tt_val < (-__pyx_v_9engine_cy_MATE_THRESHOLD));
-  if (__pyx_t_9) {
+  __pyx_t_7 = (__pyx_v_tt_val < (-__pyx_v_9engine_cy_MATE_THRESHOLD));
+  if (__pyx_t_7) {
 
-    /* "engine.pyx":709
+    /* "engine.pyx":716
  *         tt_val += ply
  *     elif tt_val < -MATE_THRESHOLD:
  *         tt_val -= ply             # <<<<<<<<<<<<<<
@@ -7421,7 +7509,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_tt_val = (__pyx_v_tt_val - __pyx_v_ply);
 
-    /* "engine.pyx":708
+    /* "engine.pyx":715
  *     if tt_val > MATE_THRESHOLD:
  *         tt_val += ply
  *     elif tt_val < -MATE_THRESHOLD:             # <<<<<<<<<<<<<<
@@ -7429,9 +7517,9 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
  * 
 */
   }
-  __pyx_L89:;
+  __pyx_L92:;
 
-  /* "engine.pyx":711
+  /* "engine.pyx":718
  *         tt_val -= ply
  * 
  *     if key == info.root_key or entry.key != info.root_key:             # <<<<<<<<<<<<<<
@@ -7441,15 +7529,15 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
   __pyx_t_1 = (__pyx_v_key == __pyx_v_9engine_cy_info.root_key);
   if (!__pyx_t_1) {
   } else {
-    __pyx_t_9 = __pyx_t_1;
-    goto __pyx_L91_bool_binop_done;
+    __pyx_t_7 = __pyx_t_1;
+    goto __pyx_L94_bool_binop_done;
   }
   __pyx_t_1 = (__pyx_v_entry->key != __pyx_v_9engine_cy_info.root_key);
-  __pyx_t_9 = __pyx_t_1;
-  __pyx_L91_bool_binop_done:;
-  if (__pyx_t_9) {
+  __pyx_t_7 = __pyx_t_1;
+  __pyx_L94_bool_binop_done:;
+  if (__pyx_t_7) {
 
-    /* "engine.pyx":712
+    /* "engine.pyx":719
  * 
  *     if key == info.root_key or entry.key != info.root_key:
  *         entry.key = key             # <<<<<<<<<<<<<<
@@ -7458,7 +7546,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_entry->key = __pyx_v_key;
 
-    /* "engine.pyx":713
+    /* "engine.pyx":720
  *     if key == info.root_key or entry.key != info.root_key:
  *         entry.key = key
  *         entry.depth = depth             # <<<<<<<<<<<<<<
@@ -7467,7 +7555,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_entry->depth = __pyx_v_depth;
 
-    /* "engine.pyx":714
+    /* "engine.pyx":721
  *         entry.key = key
  *         entry.depth = depth
  *         entry.val = tt_val             # <<<<<<<<<<<<<<
@@ -7476,7 +7564,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_entry->val = __pyx_v_tt_val;
 
-    /* "engine.pyx":715
+    /* "engine.pyx":722
  *         entry.depth = depth
  *         entry.val = tt_val
  *         entry.flag = tt_flag             # <<<<<<<<<<<<<<
@@ -7485,7 +7573,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_entry->flag = __pyx_v_tt_flag;
 
-    /* "engine.pyx":716
+    /* "engine.pyx":723
  *         entry.val = tt_val
  *         entry.flag = tt_flag
  *         entry.move = best_move             # <<<<<<<<<<<<<<
@@ -7494,7 +7582,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
     __pyx_v_entry->move = __pyx_v_best_move;
 
-    /* "engine.pyx":711
+    /* "engine.pyx":718
  *         tt_val -= ply
  * 
  *     if key == info.root_key or entry.key != info.root_key:             # <<<<<<<<<<<<<<
@@ -7503,7 +7591,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
 */
   }
 
-  /* "engine.pyx":718
+  /* "engine.pyx":725
  *         entry.move = best_move
  * 
  *     return best_val             # <<<<<<<<<<<<<<
@@ -7534,7 +7622,7 @@ static int __pyx_f_9engine_cy_negamax(struct __pyx_obj_8board_cy_CustomBitboardB
   return __pyx_r;
 }
 
-/* "engine.pyx":721
+/* "engine.pyx":728
  * 
  * # --- Main Engine API ---
  * def get_best_move_cy(             # <<<<<<<<<<<<<<
@@ -7585,70 +7673,70 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_chess_board,&__pyx_mstate_global->__pyx_n_u_time_limit,&__pyx_mstate_global->__pyx_n_u_depth_limit,&__pyx_mstate_global->__pyx_n_u_print_info,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len) < 0) __PYX_ERR(0, 721, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len) < 0) __PYX_ERR(0, 728, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  4:
         values[3] = __Pyx_ArgRef_FASTCALL(__pyx_args, 3);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[3])) __PYX_ERR(0, 721, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[3])) __PYX_ERR(0, 728, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  3:
         values[2] = __Pyx_ArgRef_FASTCALL(__pyx_args, 2);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 721, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 728, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  2:
         values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 721, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 728, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 721, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 728, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "get_best_move_cy", 0) < 0) __PYX_ERR(0, 721, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "get_best_move_cy", 0) < 0) __PYX_ERR(0, 728, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 1; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("get_best_move_cy", 0, 1, 4, i); __PYX_ERR(0, 721, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("get_best_move_cy", 0, 1, 4, i); __PYX_ERR(0, 728, __pyx_L3_error) }
       }
     } else {
       switch (__pyx_nargs) {
         case  4:
         values[3] = __Pyx_ArgRef_FASTCALL(__pyx_args, 3);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[3])) __PYX_ERR(0, 721, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[3])) __PYX_ERR(0, 728, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  3:
         values[2] = __Pyx_ArgRef_FASTCALL(__pyx_args, 2);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 721, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[2])) __PYX_ERR(0, 728, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  2:
         values[1] = __Pyx_ArgRef_FASTCALL(__pyx_args, 1);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 721, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[1])) __PYX_ERR(0, 728, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 721, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 728, __pyx_L3_error)
         break;
         default: goto __pyx_L5_argtuple_error;
       }
     }
     __pyx_v_chess_board = values[0];
     if (values[1]) {
-      __pyx_v_time_limit = __Pyx_PyFloat_AsDouble(values[1]); if (unlikely((__pyx_v_time_limit == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 723, __pyx_L3_error)
+      __pyx_v_time_limit = __Pyx_PyFloat_AsDouble(values[1]); if (unlikely((__pyx_v_time_limit == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 730, __pyx_L3_error)
     } else {
       __pyx_v_time_limit = ((double)((double)1.0));
     }
     if (values[2]) {
-      __pyx_v_depth_limit = __Pyx_PyLong_As_int(values[2]); if (unlikely((__pyx_v_depth_limit == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 724, __pyx_L3_error)
+      __pyx_v_depth_limit = __Pyx_PyLong_As_int(values[2]); if (unlikely((__pyx_v_depth_limit == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 731, __pyx_L3_error)
     } else {
       __pyx_v_depth_limit = ((int)((int)0));
     }
     if (values[3]) {
-      __pyx_v_print_info = __Pyx_PyObject_IsTrue(values[3]); if (unlikely((__pyx_v_print_info == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 725, __pyx_L3_error)
+      __pyx_v_print_info = __Pyx_PyObject_IsTrue(values[3]); if (unlikely((__pyx_v_print_info == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 732, __pyx_L3_error)
     } else {
 
-      /* "engine.pyx":725
+      /* "engine.pyx":732
  *     double time_limit = 1.0,
  *     int depth_limit = 0,
  *     bint print_info = False,             # <<<<<<<<<<<<<<
@@ -7660,7 +7748,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("get_best_move_cy", 0, 1, 4, __pyx_nargs); __PYX_ERR(0, 721, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("get_best_move_cy", 0, 1, 4, __pyx_nargs); __PYX_ERR(0, 728, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -7673,7 +7761,7 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   __pyx_L4_argument_unpacking_done:;
   __pyx_r = __pyx_pf_9engine_cy_2get_best_move_cy(__pyx_self, __pyx_v_chess_board, __pyx_v_time_limit, __pyx_v_depth_limit, __pyx_v_print_info);
 
-  /* "engine.pyx":721
+  /* "engine.pyx":728
  * 
  * # --- Main Engine API ---
  * def get_best_move_cy(             # <<<<<<<<<<<<<<
@@ -7734,7 +7822,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("get_best_move_cy", 0);
 
-  /* "engine.pyx":729
+  /* "engine.pyx":736
  *     """Finds the best move using iterative deepening search (Cython compiled)."""
  *     global info
  *     info.start_time = time.time()             # <<<<<<<<<<<<<<
@@ -7742,9 +7830,9 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
  *     info.stop = False
 */
   __pyx_t_2 = NULL;
-  __Pyx_GetModuleGlobalName(__pyx_t_3, __pyx_mstate_global->__pyx_n_u_time); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 729, __pyx_L1_error)
+  __Pyx_GetModuleGlobalName(__pyx_t_3, __pyx_mstate_global->__pyx_n_u_time); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 736, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_3);
-  __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_mstate_global->__pyx_n_u_time); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 729, __pyx_L1_error)
+  __pyx_t_4 = __Pyx_PyObject_GetAttrStr(__pyx_t_3, __pyx_mstate_global->__pyx_n_u_time); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 736, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_4);
   __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
   __pyx_t_5 = 1;
@@ -7764,14 +7852,14 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
     __pyx_t_1 = __Pyx_PyObject_FastCall(__pyx_t_4, __pyx_callargs+__pyx_t_5, (1-__pyx_t_5) | (__pyx_t_5*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
     __Pyx_XDECREF(__pyx_t_2); __pyx_t_2 = 0;
     __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-    if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 729, __pyx_L1_error)
+    if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 736, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
   }
-  __pyx_t_6 = __Pyx_PyFloat_AsDouble(__pyx_t_1); if (unlikely((__pyx_t_6 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 729, __pyx_L1_error)
+  __pyx_t_6 = __Pyx_PyFloat_AsDouble(__pyx_t_1); if (unlikely((__pyx_t_6 == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 736, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
   __pyx_v_9engine_cy_info.start_time = __pyx_t_6;
 
-  /* "engine.pyx":730
+  /* "engine.pyx":737
  *     global info
  *     info.start_time = time.time()
  *     info.time_limit = time_limit             # <<<<<<<<<<<<<<
@@ -7780,7 +7868,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
   __pyx_v_9engine_cy_info.time_limit = __pyx_v_time_limit;
 
-  /* "engine.pyx":731
+  /* "engine.pyx":738
  *     info.start_time = time.time()
  *     info.time_limit = time_limit
  *     info.stop = False             # <<<<<<<<<<<<<<
@@ -7789,7 +7877,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
   __pyx_v_9engine_cy_info.stop = 0;
 
-  /* "engine.pyx":732
+  /* "engine.pyx":739
  *     info.time_limit = time_limit
  *     info.stop = False
  *     info.nodes = 0             # <<<<<<<<<<<<<<
@@ -7798,7 +7886,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
   __pyx_v_9engine_cy_info.nodes = 0;
 
-  /* "engine.pyx":734
+  /* "engine.pyx":741
  *     info.nodes = 0
  * 
  *     cdef CustomBitboardBoard board = CustomBitboardBoard.from_chess_board(chess_board)             # <<<<<<<<<<<<<<
@@ -7812,14 +7900,14 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
     PyObject *__pyx_callargs[2] = {__pyx_t_4, __pyx_v_chess_board};
     __pyx_t_1 = __Pyx_PyObject_FastCallMethod(__pyx_mstate_global->__pyx_n_u_from_chess_board, __pyx_callargs+__pyx_t_5, (2-__pyx_t_5) | (1*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
     __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-    if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 734, __pyx_L1_error)
+    if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 741, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
   }
-  if (!(likely(((__pyx_t_1) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_1, __pyx_mstate_global->__pyx_ptype_8board_cy_CustomBitboardBoard))))) __PYX_ERR(0, 734, __pyx_L1_error)
+  if (!(likely(((__pyx_t_1) == Py_None) || likely(__Pyx_TypeTest(__pyx_t_1, __pyx_mstate_global->__pyx_ptype_8board_cy_CustomBitboardBoard))))) __PYX_ERR(0, 741, __pyx_L1_error)
   __pyx_v_board = ((struct __pyx_obj_8board_cy_CustomBitboardBoard *)__pyx_t_1);
   __pyx_t_1 = 0;
 
-  /* "engine.pyx":736
+  /* "engine.pyx":743
  *     cdef CustomBitboardBoard board = CustomBitboardBoard.from_chess_board(chess_board)
  * 
  *     memset(killer_moves, 0, sizeof(killer_moves))             # <<<<<<<<<<<<<<
@@ -7828,7 +7916,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
   (void)(memset(__pyx_v_9engine_cy_killer_moves, 0, (sizeof(__pyx_v_9engine_cy_killer_moves))));
 
-  /* "engine.pyx":737
+  /* "engine.pyx":744
  * 
  *     memset(killer_moves, 0, sizeof(killer_moves))
  *     memset(history_moves, 0, sizeof(history_moves))             # <<<<<<<<<<<<<<
@@ -7837,7 +7925,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
   (void)(memset(__pyx_v_9engine_cy_history_moves, 0, (sizeof(__pyx_v_9engine_cy_history_moves))));
 
-  /* "engine.pyx":740
+  /* "engine.pyx":747
  * 
  *     cdef CMoveList legal_moves
  *     legal_moves.count = 0             # <<<<<<<<<<<<<<
@@ -7846,16 +7934,16 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
   __pyx_v_legal_moves.count = 0;
 
-  /* "engine.pyx":741
+  /* "engine.pyx":748
  *     cdef CMoveList legal_moves
  *     legal_moves.count = 0
  *     board._generate_legal_moves_c(&legal_moves)             # <<<<<<<<<<<<<<
  *     if legal_moves.count == 0:
  *         return None
 */
-  ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->_generate_legal_moves_c(__pyx_v_board, (&__pyx_v_legal_moves)); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 741, __pyx_L1_error)
+  ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_board->__pyx_vtab)->_generate_legal_moves_c(__pyx_v_board, (&__pyx_v_legal_moves)); if (unlikely(PyErr_Occurred())) __PYX_ERR(0, 748, __pyx_L1_error)
 
-  /* "engine.pyx":742
+  /* "engine.pyx":749
  *     legal_moves.count = 0
  *     board._generate_legal_moves_c(&legal_moves)
  *     if legal_moves.count == 0:             # <<<<<<<<<<<<<<
@@ -7865,7 +7953,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
   __pyx_t_7 = (__pyx_v_legal_moves.count == 0);
   if (__pyx_t_7) {
 
-    /* "engine.pyx":743
+    /* "engine.pyx":750
  *     board._generate_legal_moves_c(&legal_moves)
  *     if legal_moves.count == 0:
  *         return None             # <<<<<<<<<<<<<<
@@ -7876,7 +7964,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
     __pyx_r = Py_None; __Pyx_INCREF(Py_None);
     goto __pyx_L0;
 
-    /* "engine.pyx":742
+    /* "engine.pyx":749
  *     legal_moves.count = 0
  *     board._generate_legal_moves_c(&legal_moves)
  *     if legal_moves.count == 0:             # <<<<<<<<<<<<<<
@@ -7885,7 +7973,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
   }
 
-  /* "engine.pyx":745
+  /* "engine.pyx":752
  *         return None
  * 
  *     info.root_key = board.zobrist_key             # <<<<<<<<<<<<<<
@@ -7895,7 +7983,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
   __pyx_t_8 = __pyx_v_board->zobrist_key;
   __pyx_v_9engine_cy_info.root_key = __pyx_t_8;
 
-  /* "engine.pyx":746
+  /* "engine.pyx":753
  * 
  *     info.root_key = board.zobrist_key
  *     info.root_best_move = legal_moves.moves[0]             # <<<<<<<<<<<<<<
@@ -7904,7 +7992,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
   __pyx_v_9engine_cy_info.root_best_move = (__pyx_v_legal_moves.moves[0]);
 
-  /* "engine.pyx":748
+  /* "engine.pyx":755
  *     info.root_best_move = legal_moves.moves[0]
  * 
  *     cdef int best_move_so_far = legal_moves.moves[0]             # <<<<<<<<<<<<<<
@@ -7913,7 +8001,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
   __pyx_v_best_move_so_far = (__pyx_v_legal_moves.moves[0]);
 
-  /* "engine.pyx":749
+  /* "engine.pyx":756
  * 
  *     cdef int best_move_so_far = legal_moves.moves[0]
  *     cdef int color = 1 if board.side_to_move == WHITE else -1             # <<<<<<<<<<<<<<
@@ -7928,7 +8016,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
   }
   __pyx_v_color = __pyx_t_9;
 
-  /* "engine.pyx":751
+  /* "engine.pyx":758
  *     cdef int color = 1 if board.side_to_move == WHITE else -1
  * 
  *     cdef int depth = 1             # <<<<<<<<<<<<<<
@@ -7937,7 +8025,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
   __pyx_v_depth = 1;
 
-  /* "engine.pyx":756
+  /* "engine.pyx":763
  *     cdef TTEntry *entry
  *     cdef int score
  *     cdef int delta = 15             # <<<<<<<<<<<<<<
@@ -7946,7 +8034,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
   __pyx_v_delta = 15;
 
-  /* "engine.pyx":757
+  /* "engine.pyx":764
  *     cdef int score
  *     cdef int delta = 15
  *     cdef int last_score = 0             # <<<<<<<<<<<<<<
@@ -7955,7 +8043,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
   __pyx_v_last_score = 0;
 
-  /* "engine.pyx":760
+  /* "engine.pyx":767
  *     cdef int alpha_aw, beta_aw
  * 
  *     while not info.stop:             # <<<<<<<<<<<<<<
@@ -7966,7 +8054,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
     __pyx_t_7 = (!__pyx_v_9engine_cy_info.stop);
     if (!__pyx_t_7) break;
 
-    /* "engine.pyx":761
+    /* "engine.pyx":768
  * 
  *     while not info.stop:
  *         if depth_limit > 0 and depth > depth_limit:             # <<<<<<<<<<<<<<
@@ -7984,7 +8072,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
     __pyx_L7_bool_binop_done:;
     if (__pyx_t_7) {
 
-      /* "engine.pyx":762
+      /* "engine.pyx":769
  *     while not info.stop:
  *         if depth_limit > 0 and depth > depth_limit:
  *             break             # <<<<<<<<<<<<<<
@@ -7993,7 +8081,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
       goto __pyx_L5_break;
 
-      /* "engine.pyx":761
+      /* "engine.pyx":768
  * 
  *     while not info.stop:
  *         if depth_limit > 0 and depth > depth_limit:             # <<<<<<<<<<<<<<
@@ -8002,7 +8090,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
     }
 
-    /* "engine.pyx":764
+    /* "engine.pyx":771
  *             break
  * 
  *         info.current_depth = depth             # <<<<<<<<<<<<<<
@@ -8011,7 +8099,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
     __pyx_v_9engine_cy_info.current_depth = __pyx_v_depth;
 
-    /* "engine.pyx":765
+    /* "engine.pyx":772
  * 
  *         info.current_depth = depth
  *         if depth < 5:             # <<<<<<<<<<<<<<
@@ -8021,16 +8109,16 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
     __pyx_t_7 = (__pyx_v_depth < 5);
     if (__pyx_t_7) {
 
-      /* "engine.pyx":766
+      /* "engine.pyx":773
  *         info.current_depth = depth
  *         if depth < 5:
  *             negamax(board, depth, -INFINITE, INFINITE, color, 0)             # <<<<<<<<<<<<<<
  *             key = board.zobrist_key
  *             idx = key & (TT_SIZE - 1)
 */
-      __pyx_t_9 = __pyx_f_9engine_cy_negamax(__pyx_v_board, __pyx_v_depth, (-__pyx_v_9engine_cy_INFINITE), __pyx_v_9engine_cy_INFINITE, __pyx_v_color, 0); if (unlikely(__pyx_t_9 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 766, __pyx_L1_error)
+      __pyx_t_9 = __pyx_f_9engine_cy_negamax(__pyx_v_board, __pyx_v_depth, (-__pyx_v_9engine_cy_INFINITE), __pyx_v_9engine_cy_INFINITE, __pyx_v_color, 0, NULL); if (unlikely(__pyx_t_9 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 773, __pyx_L1_error)
 
-      /* "engine.pyx":767
+      /* "engine.pyx":774
  *         if depth < 5:
  *             negamax(board, depth, -INFINITE, INFINITE, color, 0)
  *             key = board.zobrist_key             # <<<<<<<<<<<<<<
@@ -8040,7 +8128,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
       __pyx_t_8 = __pyx_v_board->zobrist_key;
       __pyx_v_key = __pyx_t_8;
 
-      /* "engine.pyx":768
+      /* "engine.pyx":775
  *             negamax(board, depth, -INFINITE, INFINITE, color, 0)
  *             key = board.zobrist_key
  *             idx = key & (TT_SIZE - 1)             # <<<<<<<<<<<<<<
@@ -8049,7 +8137,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
       __pyx_v_idx = (__pyx_v_key & 0xfffff);
 
-      /* "engine.pyx":769
+      /* "engine.pyx":776
  *             key = board.zobrist_key
  *             idx = key & (TT_SIZE - 1)
  *             entry = &_tt[idx]             # <<<<<<<<<<<<<<
@@ -8058,7 +8146,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
       __pyx_v_entry = (&(__pyx_v_9engine_cy__tt[__pyx_v_idx]));
 
-      /* "engine.pyx":770
+      /* "engine.pyx":777
  *             idx = key & (TT_SIZE - 1)
  *             entry = &_tt[idx]
  *             if entry.key == key:             # <<<<<<<<<<<<<<
@@ -8068,7 +8156,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
       __pyx_t_7 = (__pyx_v_entry->key == __pyx_v_key);
       if (__pyx_t_7) {
 
-        /* "engine.pyx":771
+        /* "engine.pyx":778
  *             entry = &_tt[idx]
  *             if entry.key == key:
  *                 last_score = entry.val             # <<<<<<<<<<<<<<
@@ -8078,7 +8166,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
         __pyx_t_9 = __pyx_v_entry->val;
         __pyx_v_last_score = __pyx_t_9;
 
-        /* "engine.pyx":770
+        /* "engine.pyx":777
  *             idx = key & (TT_SIZE - 1)
  *             entry = &_tt[idx]
  *             if entry.key == key:             # <<<<<<<<<<<<<<
@@ -8087,7 +8175,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
       }
 
-      /* "engine.pyx":765
+      /* "engine.pyx":772
  * 
  *         info.current_depth = depth
  *         if depth < 5:             # <<<<<<<<<<<<<<
@@ -8097,7 +8185,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
       goto __pyx_L9;
     }
 
-    /* "engine.pyx":773
+    /* "engine.pyx":780
  *                 last_score = entry.val
  *         else:
  *             delta = 15             # <<<<<<<<<<<<<<
@@ -8107,7 +8195,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
     /*else*/ {
       __pyx_v_delta = 15;
 
-      /* "engine.pyx":774
+      /* "engine.pyx":781
  *         else:
  *             delta = 15
  *             alpha_aw = last_score - delta             # <<<<<<<<<<<<<<
@@ -8116,7 +8204,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
       __pyx_v_alpha_aw = (__pyx_v_last_score - __pyx_v_delta);
 
-      /* "engine.pyx":775
+      /* "engine.pyx":782
  *             delta = 15
  *             alpha_aw = last_score - delta
  *             beta_aw = last_score + delta             # <<<<<<<<<<<<<<
@@ -8125,7 +8213,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
       __pyx_v_beta_aw = (__pyx_v_last_score + __pyx_v_delta);
 
-      /* "engine.pyx":776
+      /* "engine.pyx":783
  *             alpha_aw = last_score - delta
  *             beta_aw = last_score + delta
  *             while not info.stop:             # <<<<<<<<<<<<<<
@@ -8136,7 +8224,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
         __pyx_t_7 = (!__pyx_v_9engine_cy_info.stop);
         if (!__pyx_t_7) break;
 
-        /* "engine.pyx":777
+        /* "engine.pyx":784
  *             beta_aw = last_score + delta
  *             while not info.stop:
  *                 if alpha_aw < -INFINITE: alpha_aw = -INFINITE             # <<<<<<<<<<<<<<
@@ -8148,7 +8236,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
           __pyx_v_alpha_aw = (-__pyx_v_9engine_cy_INFINITE);
         }
 
-        /* "engine.pyx":778
+        /* "engine.pyx":785
  *             while not info.stop:
  *                 if alpha_aw < -INFINITE: alpha_aw = -INFINITE
  *                 if beta_aw > INFINITE: beta_aw = INFINITE             # <<<<<<<<<<<<<<
@@ -8160,17 +8248,17 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
           __pyx_v_beta_aw = __pyx_v_9engine_cy_INFINITE;
         }
 
-        /* "engine.pyx":780
+        /* "engine.pyx":787
  *                 if beta_aw > INFINITE: beta_aw = INFINITE
  * 
  *                 score = negamax(board, depth, alpha_aw, beta_aw, color, 0)             # <<<<<<<<<<<<<<
  * 
  *                 if info.stop:
 */
-        __pyx_t_9 = __pyx_f_9engine_cy_negamax(__pyx_v_board, __pyx_v_depth, __pyx_v_alpha_aw, __pyx_v_beta_aw, __pyx_v_color, 0); if (unlikely(__pyx_t_9 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 780, __pyx_L1_error)
+        __pyx_t_9 = __pyx_f_9engine_cy_negamax(__pyx_v_board, __pyx_v_depth, __pyx_v_alpha_aw, __pyx_v_beta_aw, __pyx_v_color, 0, NULL); if (unlikely(__pyx_t_9 == ((int)-1) && PyErr_Occurred())) __PYX_ERR(0, 787, __pyx_L1_error)
         __pyx_v_score = __pyx_t_9;
 
-        /* "engine.pyx":782
+        /* "engine.pyx":789
  *                 score = negamax(board, depth, alpha_aw, beta_aw, color, 0)
  * 
  *                 if info.stop:             # <<<<<<<<<<<<<<
@@ -8179,7 +8267,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
         if (__pyx_v_9engine_cy_info.stop) {
 
-          /* "engine.pyx":783
+          /* "engine.pyx":790
  * 
  *                 if info.stop:
  *                     break             # <<<<<<<<<<<<<<
@@ -8188,7 +8276,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
           goto __pyx_L12_break;
 
-          /* "engine.pyx":782
+          /* "engine.pyx":789
  *                 score = negamax(board, depth, alpha_aw, beta_aw, color, 0)
  * 
  *                 if info.stop:             # <<<<<<<<<<<<<<
@@ -8197,7 +8285,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
         }
 
-        /* "engine.pyx":785
+        /* "engine.pyx":792
  *                     break
  * 
  *                 key = board.zobrist_key             # <<<<<<<<<<<<<<
@@ -8207,7 +8295,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
         __pyx_t_8 = __pyx_v_board->zobrist_key;
         __pyx_v_key = __pyx_t_8;
 
-        /* "engine.pyx":786
+        /* "engine.pyx":793
  * 
  *                 key = board.zobrist_key
  *                 idx = key & (TT_SIZE - 1)             # <<<<<<<<<<<<<<
@@ -8216,7 +8304,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
         __pyx_v_idx = (__pyx_v_key & 0xfffff);
 
-        /* "engine.pyx":787
+        /* "engine.pyx":794
  *                 key = board.zobrist_key
  *                 idx = key & (TT_SIZE - 1)
  *                 entry = &_tt[idx]             # <<<<<<<<<<<<<<
@@ -8225,7 +8313,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
         __pyx_v_entry = (&(__pyx_v_9engine_cy__tt[__pyx_v_idx]));
 
-        /* "engine.pyx":788
+        /* "engine.pyx":795
  *                 idx = key & (TT_SIZE - 1)
  *                 entry = &_tt[idx]
  *                 if entry.key == key:             # <<<<<<<<<<<<<<
@@ -8235,7 +8323,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
         __pyx_t_7 = (__pyx_v_entry->key == __pyx_v_key);
         if (__pyx_t_7) {
 
-          /* "engine.pyx":789
+          /* "engine.pyx":796
  *                 entry = &_tt[idx]
  *                 if entry.key == key:
  *                     last_score = entry.val             # <<<<<<<<<<<<<<
@@ -8245,7 +8333,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
           __pyx_t_9 = __pyx_v_entry->val;
           __pyx_v_last_score = __pyx_t_9;
 
-          /* "engine.pyx":788
+          /* "engine.pyx":795
  *                 idx = key & (TT_SIZE - 1)
  *                 entry = &_tt[idx]
  *                 if entry.key == key:             # <<<<<<<<<<<<<<
@@ -8255,7 +8343,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
           goto __pyx_L16;
         }
 
-        /* "engine.pyx":791
+        /* "engine.pyx":798
  *                     last_score = entry.val
  *                 else:
  *                     last_score = score             # <<<<<<<<<<<<<<
@@ -8267,7 +8355,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
         }
         __pyx_L16:;
 
-        /* "engine.pyx":793
+        /* "engine.pyx":800
  *                     last_score = score
  * 
  *                 if last_score <= alpha_aw:             # <<<<<<<<<<<<<<
@@ -8277,7 +8365,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
         __pyx_t_7 = (__pyx_v_last_score <= __pyx_v_alpha_aw);
         if (__pyx_t_7) {
 
-          /* "engine.pyx":794
+          /* "engine.pyx":801
  * 
  *                 if last_score <= alpha_aw:
  *                     beta_aw = alpha_aw             # <<<<<<<<<<<<<<
@@ -8286,7 +8374,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
           __pyx_v_beta_aw = __pyx_v_alpha_aw;
 
-          /* "engine.pyx":795
+          /* "engine.pyx":802
  *                 if last_score <= alpha_aw:
  *                     beta_aw = alpha_aw
  *                     delta += delta // 3 + 5             # <<<<<<<<<<<<<<
@@ -8295,7 +8383,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
           __pyx_v_delta = (__pyx_v_delta + ((__pyx_v_delta / 3) + 5));
 
-          /* "engine.pyx":796
+          /* "engine.pyx":803
  *                     beta_aw = alpha_aw
  *                     delta += delta // 3 + 5
  *                     alpha_aw = last_score - delta             # <<<<<<<<<<<<<<
@@ -8304,7 +8392,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
           __pyx_v_alpha_aw = (__pyx_v_last_score - __pyx_v_delta);
 
-          /* "engine.pyx":793
+          /* "engine.pyx":800
  *                     last_score = score
  * 
  *                 if last_score <= alpha_aw:             # <<<<<<<<<<<<<<
@@ -8314,7 +8402,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
           goto __pyx_L17;
         }
 
-        /* "engine.pyx":797
+        /* "engine.pyx":804
  *                     delta += delta // 3 + 5
  *                     alpha_aw = last_score - delta
  *                 elif last_score >= beta_aw:             # <<<<<<<<<<<<<<
@@ -8324,7 +8412,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
         __pyx_t_7 = (__pyx_v_last_score >= __pyx_v_beta_aw);
         if (__pyx_t_7) {
 
-          /* "engine.pyx":798
+          /* "engine.pyx":805
  *                     alpha_aw = last_score - delta
  *                 elif last_score >= beta_aw:
  *                     alpha_aw = beta_aw             # <<<<<<<<<<<<<<
@@ -8333,7 +8421,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
           __pyx_v_alpha_aw = __pyx_v_beta_aw;
 
-          /* "engine.pyx":799
+          /* "engine.pyx":806
  *                 elif last_score >= beta_aw:
  *                     alpha_aw = beta_aw
  *                     delta += delta // 3 + 5             # <<<<<<<<<<<<<<
@@ -8342,7 +8430,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
           __pyx_v_delta = (__pyx_v_delta + ((__pyx_v_delta / 3) + 5));
 
-          /* "engine.pyx":800
+          /* "engine.pyx":807
  *                     alpha_aw = beta_aw
  *                     delta += delta // 3 + 5
  *                     beta_aw = last_score + delta             # <<<<<<<<<<<<<<
@@ -8351,7 +8439,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
           __pyx_v_beta_aw = (__pyx_v_last_score + __pyx_v_delta);
 
-          /* "engine.pyx":797
+          /* "engine.pyx":804
  *                     delta += delta // 3 + 5
  *                     alpha_aw = last_score - delta
  *                 elif last_score >= beta_aw:             # <<<<<<<<<<<<<<
@@ -8361,7 +8449,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
           goto __pyx_L17;
         }
 
-        /* "engine.pyx":802
+        /* "engine.pyx":809
  *                     beta_aw = last_score + delta
  *                 else:
  *                     break             # <<<<<<<<<<<<<<
@@ -8377,7 +8465,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
     }
     __pyx_L9:;
 
-    /* "engine.pyx":804
+    /* "engine.pyx":811
  *                     break
  * 
  *         if info.stop:             # <<<<<<<<<<<<<<
@@ -8386,7 +8474,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
     if (__pyx_v_9engine_cy_info.stop) {
 
-      /* "engine.pyx":805
+      /* "engine.pyx":812
  * 
  *         if info.stop:
  *             break             # <<<<<<<<<<<<<<
@@ -8395,7 +8483,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
       goto __pyx_L5_break;
 
-      /* "engine.pyx":804
+      /* "engine.pyx":811
  *                     break
  * 
  *         if info.stop:             # <<<<<<<<<<<<<<
@@ -8404,7 +8492,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
     }
 
-    /* "engine.pyx":807
+    /* "engine.pyx":814
  *             break
  * 
  *         best_move_so_far = info.root_best_move             # <<<<<<<<<<<<<<
@@ -8414,7 +8502,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
     __pyx_t_9 = __pyx_v_9engine_cy_info.root_best_move;
     __pyx_v_best_move_so_far = __pyx_t_9;
 
-    /* "engine.pyx":809
+    /* "engine.pyx":816
  *         best_move_so_far = info.root_best_move
  * 
  *         if print_info:             # <<<<<<<<<<<<<<
@@ -8423,7 +8511,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
     if (__pyx_v_print_info) {
 
-      /* "engine.pyx":810
+      /* "engine.pyx":817
  * 
  *         if print_info:
  *             score = 0             # <<<<<<<<<<<<<<
@@ -8432,7 +8520,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
       __pyx_v_score = 0;
 
-      /* "engine.pyx":811
+      /* "engine.pyx":818
  *         if print_info:
  *             score = 0
  *             if entry.key == key:             # <<<<<<<<<<<<<<
@@ -8442,7 +8530,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
       __pyx_t_7 = (__pyx_v_entry->key == __pyx_v_key);
       if (__pyx_t_7) {
 
-        /* "engine.pyx":812
+        /* "engine.pyx":819
  *             score = 0
  *             if entry.key == key:
  *                 score = entry.val             # <<<<<<<<<<<<<<
@@ -8452,7 +8540,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
         __pyx_t_9 = __pyx_v_entry->val;
         __pyx_v_score = __pyx_t_9;
 
-        /* "engine.pyx":811
+        /* "engine.pyx":818
  *         if print_info:
  *             score = 0
  *             if entry.key == key:             # <<<<<<<<<<<<<<
@@ -8461,46 +8549,46 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
       }
 
-      /* "engine.pyx":814
+      /* "engine.pyx":821
  *                 score = entry.val
  * 
  *             if abs(score) > MATE_THRESHOLD:             # <<<<<<<<<<<<<<
  *                 mate_plies = 99999 - abs(score)
  *                 mate_moves = (mate_plies + 1) // 2
 */
-      __pyx_t_9 = abs(__pyx_v_score); if (unlikely(__pyx_t_9 == ((int)-1))) __PYX_ERR(0, 814, __pyx_L1_error)
+      __pyx_t_9 = abs(__pyx_v_score); if (unlikely(__pyx_t_9 == ((int)-1))) __PYX_ERR(0, 821, __pyx_L1_error)
       __pyx_t_7 = (__pyx_t_9 > __pyx_v_9engine_cy_MATE_THRESHOLD);
       if (__pyx_t_7) {
 
-        /* "engine.pyx":815
+        /* "engine.pyx":822
  * 
  *             if abs(score) > MATE_THRESHOLD:
  *                 mate_plies = 99999 - abs(score)             # <<<<<<<<<<<<<<
  *                 mate_moves = (mate_plies + 1) // 2
  *                 if score < 0:
 */
-        __pyx_t_9 = abs(__pyx_v_score); if (unlikely(__pyx_t_9 == ((int)-1))) __PYX_ERR(0, 815, __pyx_L1_error)
-        __pyx_t_1 = __Pyx_PyLong_From_long((0x1869F - __pyx_t_9)); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 815, __pyx_L1_error)
+        __pyx_t_9 = abs(__pyx_v_score); if (unlikely(__pyx_t_9 == ((int)-1))) __PYX_ERR(0, 822, __pyx_L1_error)
+        __pyx_t_1 = __Pyx_PyLong_From_long((0x1869F - __pyx_t_9)); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 822, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_1);
         __Pyx_XDECREF_SET(__pyx_v_mate_plies, __pyx_t_1);
         __pyx_t_1 = 0;
 
-        /* "engine.pyx":816
+        /* "engine.pyx":823
  *             if abs(score) > MATE_THRESHOLD:
  *                 mate_plies = 99999 - abs(score)
  *                 mate_moves = (mate_plies + 1) // 2             # <<<<<<<<<<<<<<
  *                 if score < 0:
  *                     mate_moves = -mate_moves
 */
-        __pyx_t_1 = __Pyx_PyLong_AddObjC(__pyx_v_mate_plies, __pyx_mstate_global->__pyx_int_1, 1, 0, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 816, __pyx_L1_error)
+        __pyx_t_1 = __Pyx_PyLong_AddObjC(__pyx_v_mate_plies, __pyx_mstate_global->__pyx_int_1, 1, 0, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 823, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_1);
-        __pyx_t_4 = __Pyx_PyLong_FloorDivideObjC(__pyx_t_1, __pyx_mstate_global->__pyx_int_2, 2, 0, 0); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 816, __pyx_L1_error)
+        __pyx_t_4 = __Pyx_PyLong_FloorDivideObjC(__pyx_t_1, __pyx_mstate_global->__pyx_int_2, 2, 0, 0); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 823, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_4);
         __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
         __Pyx_XDECREF_SET(__pyx_v_mate_moves, __pyx_t_4);
         __pyx_t_4 = 0;
 
-        /* "engine.pyx":817
+        /* "engine.pyx":824
  *                 mate_plies = 99999 - abs(score)
  *                 mate_moves = (mate_plies + 1) // 2
  *                 if score < 0:             # <<<<<<<<<<<<<<
@@ -8510,19 +8598,19 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
         __pyx_t_7 = (__pyx_v_score < 0);
         if (__pyx_t_7) {
 
-          /* "engine.pyx":818
+          /* "engine.pyx":825
  *                 mate_moves = (mate_plies + 1) // 2
  *                 if score < 0:
  *                     mate_moves = -mate_moves             # <<<<<<<<<<<<<<
  *                 score_str = f"mate {mate_moves}"
  *             else:
 */
-          __pyx_t_4 = PyNumber_Negative(__pyx_v_mate_moves); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 818, __pyx_L1_error)
+          __pyx_t_4 = PyNumber_Negative(__pyx_v_mate_moves); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 825, __pyx_L1_error)
           __Pyx_GOTREF(__pyx_t_4);
           __Pyx_DECREF_SET(__pyx_v_mate_moves, __pyx_t_4);
           __pyx_t_4 = 0;
 
-          /* "engine.pyx":817
+          /* "engine.pyx":824
  *                 mate_plies = 99999 - abs(score)
  *                 mate_moves = (mate_plies + 1) // 2
  *                 if score < 0:             # <<<<<<<<<<<<<<
@@ -8531,22 +8619,22 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
         }
 
-        /* "engine.pyx":819
+        /* "engine.pyx":826
  *                 if score < 0:
  *                     mate_moves = -mate_moves
  *                 score_str = f"mate {mate_moves}"             # <<<<<<<<<<<<<<
  *             else:
  *                 score_str = f"cp {score}"
 */
-        __pyx_t_4 = __Pyx_PyObject_FormatSimple(__pyx_v_mate_moves, __pyx_mstate_global->__pyx_empty_unicode); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 819, __pyx_L1_error)
+        __pyx_t_4 = __Pyx_PyObject_FormatSimple(__pyx_v_mate_moves, __pyx_mstate_global->__pyx_empty_unicode); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 826, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_4);
-        __pyx_t_1 = __Pyx_PyUnicode_Concat(__pyx_mstate_global->__pyx_kp_u_mate, __pyx_t_4); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 819, __pyx_L1_error)
+        __pyx_t_1 = __Pyx_PyUnicode_Concat(__pyx_mstate_global->__pyx_kp_u_mate, __pyx_t_4); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 826, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_1);
         __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
         __Pyx_XDECREF_SET(__pyx_v_score_str, ((PyObject*)__pyx_t_1));
         __pyx_t_1 = 0;
 
-        /* "engine.pyx":814
+        /* "engine.pyx":821
  *                 score = entry.val
  * 
  *             if abs(score) > MATE_THRESHOLD:             # <<<<<<<<<<<<<<
@@ -8556,7 +8644,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
         goto __pyx_L21;
       }
 
-      /* "engine.pyx":821
+      /* "engine.pyx":828
  *                 score_str = f"mate {mate_moves}"
  *             else:
  *                 score_str = f"cp {score}"             # <<<<<<<<<<<<<<
@@ -8564,9 +8652,9 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
  *             elapsed = time.time() - info.start_time
 */
       /*else*/ {
-        __pyx_t_1 = __Pyx_PyUnicode_From_int(__pyx_v_score, 0, ' ', 'd'); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 821, __pyx_L1_error)
+        __pyx_t_1 = __Pyx_PyUnicode_From_int(__pyx_v_score, 0, ' ', 'd'); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 828, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_1);
-        __pyx_t_4 = __Pyx_PyUnicode_Concat(__pyx_mstate_global->__pyx_kp_u_cp, __pyx_t_1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 821, __pyx_L1_error)
+        __pyx_t_4 = __Pyx_PyUnicode_Concat(__pyx_mstate_global->__pyx_kp_u_cp, __pyx_t_1); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 828, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_4);
         __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
         __Pyx_XDECREF_SET(__pyx_v_score_str, ((PyObject*)__pyx_t_4));
@@ -8574,7 +8662,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
       }
       __pyx_L21:;
 
-      /* "engine.pyx":823
+      /* "engine.pyx":830
  *                 score_str = f"cp {score}"
  * 
  *             elapsed = time.time() - info.start_time             # <<<<<<<<<<<<<<
@@ -8582,9 +8670,9 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
  *             nps = int(info.nodes / elapsed) if elapsed > 0.0 else 0
 */
       __pyx_t_1 = NULL;
-      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_time); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 823, __pyx_L1_error)
+      __Pyx_GetModuleGlobalName(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_time); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 830, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_2);
-      __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_time); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 823, __pyx_L1_error)
+      __pyx_t_3 = __Pyx_PyObject_GetAttrStr(__pyx_t_2, __pyx_mstate_global->__pyx_n_u_time); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 830, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_3);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       __pyx_t_5 = 1;
@@ -8604,50 +8692,50 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
         __pyx_t_4 = __Pyx_PyObject_FastCall(__pyx_t_3, __pyx_callargs+__pyx_t_5, (1-__pyx_t_5) | (__pyx_t_5*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
         __Pyx_XDECREF(__pyx_t_1); __pyx_t_1 = 0;
         __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
-        if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 823, __pyx_L1_error)
+        if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 830, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_4);
       }
-      __pyx_t_3 = PyFloat_FromDouble(__pyx_v_9engine_cy_info.start_time); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 823, __pyx_L1_error)
+      __pyx_t_3 = PyFloat_FromDouble(__pyx_v_9engine_cy_info.start_time); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 830, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_3);
-      __pyx_t_1 = PyNumber_Subtract(__pyx_t_4, __pyx_t_3); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 823, __pyx_L1_error)
+      __pyx_t_1 = PyNumber_Subtract(__pyx_t_4, __pyx_t_3); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 830, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
       __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
       __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
       __Pyx_XDECREF_SET(__pyx_v_elapsed, __pyx_t_1);
       __pyx_t_1 = 0;
 
-      /* "engine.pyx":824
+      /* "engine.pyx":831
  * 
  *             elapsed = time.time() - info.start_time
  *             elapsed_ms = int(elapsed * 1000)             # <<<<<<<<<<<<<<
  *             nps = int(info.nodes / elapsed) if elapsed > 0.0 else 0
  *             best_move_obj = board.to_chess_move(best_move_so_far)
 */
-      __pyx_t_1 = __Pyx_PyLong_MultiplyObjC(__pyx_v_elapsed, __pyx_mstate_global->__pyx_int_1000, 0x3E8, 0, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 824, __pyx_L1_error)
+      __pyx_t_1 = __Pyx_PyLong_MultiplyObjC(__pyx_v_elapsed, __pyx_mstate_global->__pyx_int_1000, 0x3E8, 0, 0); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 831, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_1);
-      __pyx_t_3 = __Pyx_PyNumber_Int(__pyx_t_1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 824, __pyx_L1_error)
+      __pyx_t_3 = __Pyx_PyNumber_Int(__pyx_t_1); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 831, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_3);
       __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
       __Pyx_XDECREF_SET(__pyx_v_elapsed_ms, ((PyObject*)__pyx_t_3));
       __pyx_t_3 = 0;
 
-      /* "engine.pyx":825
+      /* "engine.pyx":832
  *             elapsed = time.time() - info.start_time
  *             elapsed_ms = int(elapsed * 1000)
  *             nps = int(info.nodes / elapsed) if elapsed > 0.0 else 0             # <<<<<<<<<<<<<<
  *             best_move_obj = board.to_chess_move(best_move_so_far)
  *             best_move_uci = best_move_obj.uci()
 */
-      __pyx_t_1 = PyObject_RichCompare(__pyx_v_elapsed, __pyx_mstate_global->__pyx_float_0_0, Py_GT); __Pyx_XGOTREF(__pyx_t_1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 825, __pyx_L1_error)
-      __pyx_t_7 = __Pyx_PyObject_IsTrue(__pyx_t_1); if (unlikely((__pyx_t_7 < 0))) __PYX_ERR(0, 825, __pyx_L1_error)
+      __pyx_t_1 = PyObject_RichCompare(__pyx_v_elapsed, __pyx_mstate_global->__pyx_float_0_0, Py_GT); __Pyx_XGOTREF(__pyx_t_1); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 832, __pyx_L1_error)
+      __pyx_t_7 = __Pyx_PyObject_IsTrue(__pyx_t_1); if (unlikely((__pyx_t_7 < 0))) __PYX_ERR(0, 832, __pyx_L1_error)
       __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
       if (__pyx_t_7) {
-        __pyx_t_1 = __Pyx_PyLong_From_PY_LONG_LONG(__pyx_v_9engine_cy_info.nodes); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 825, __pyx_L1_error)
+        __pyx_t_1 = __Pyx_PyLong_From_PY_LONG_LONG(__pyx_v_9engine_cy_info.nodes); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 832, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_1);
-        __pyx_t_4 = __Pyx_PyNumber_Divide(__pyx_t_1, __pyx_v_elapsed); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 825, __pyx_L1_error)
+        __pyx_t_4 = __Pyx_PyNumber_Divide(__pyx_t_1, __pyx_v_elapsed); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 832, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_4);
         __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-        __pyx_t_1 = __Pyx_PyNumber_Int(__pyx_t_4); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 825, __pyx_L1_error)
+        __pyx_t_1 = __Pyx_PyNumber_Int(__pyx_t_4); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 832, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_1);
         __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
         __pyx_t_3 = __pyx_t_1;
@@ -8659,7 +8747,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
       __Pyx_XDECREF_SET(__pyx_v_nps, ((PyObject*)__pyx_t_3));
       __pyx_t_3 = 0;
 
-      /* "engine.pyx":826
+      /* "engine.pyx":833
  *             elapsed_ms = int(elapsed * 1000)
  *             nps = int(info.nodes / elapsed) if elapsed > 0.0 else 0
  *             best_move_obj = board.to_chess_move(best_move_so_far)             # <<<<<<<<<<<<<<
@@ -8668,7 +8756,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
       __pyx_t_1 = ((PyObject *)__pyx_v_board);
       __Pyx_INCREF(__pyx_t_1);
-      __pyx_t_4 = __Pyx_PyLong_From_int(__pyx_v_best_move_so_far); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 826, __pyx_L1_error)
+      __pyx_t_4 = __Pyx_PyLong_From_int(__pyx_v_best_move_so_far); if (unlikely(!__pyx_t_4)) __PYX_ERR(0, 833, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_4);
       __pyx_t_5 = 0;
       {
@@ -8676,13 +8764,13 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
         __pyx_t_3 = __Pyx_PyObject_FastCallMethod(__pyx_mstate_global->__pyx_n_u_to_chess_move, __pyx_callargs+__pyx_t_5, (2-__pyx_t_5) | (1*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
         __Pyx_XDECREF(__pyx_t_1); __pyx_t_1 = 0;
         __Pyx_DECREF(__pyx_t_4); __pyx_t_4 = 0;
-        if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 826, __pyx_L1_error)
+        if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 833, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_3);
       }
       __Pyx_XDECREF_SET(__pyx_v_best_move_obj, __pyx_t_3);
       __pyx_t_3 = 0;
 
-      /* "engine.pyx":827
+      /* "engine.pyx":834
  *             nps = int(info.nodes / elapsed) if elapsed > 0.0 else 0
  *             best_move_obj = board.to_chess_move(best_move_so_far)
  *             best_move_uci = best_move_obj.uci()             # <<<<<<<<<<<<<<
@@ -8696,13 +8784,13 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
         PyObject *__pyx_callargs[2] = {__pyx_t_4, NULL};
         __pyx_t_3 = __Pyx_PyObject_FastCallMethod(__pyx_mstate_global->__pyx_n_u_uci, __pyx_callargs+__pyx_t_5, (1-__pyx_t_5) | (1*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
         __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
-        if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 827, __pyx_L1_error)
+        if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 834, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_3);
       }
       __Pyx_XDECREF_SET(__pyx_v_best_move_uci, __pyx_t_3);
       __pyx_t_3 = 0;
 
-      /* "engine.pyx":828
+      /* "engine.pyx":835
  *             best_move_obj = board.to_chess_move(best_move_so_far)
  *             best_move_uci = best_move_obj.uci()
  *             print(             # <<<<<<<<<<<<<<
@@ -8713,30 +8801,30 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
       __Pyx_INCREF(__pyx_builtin_print);
       __pyx_t_1 = __pyx_builtin_print; 
 
-      /* "engine.pyx":829
+      /* "engine.pyx":836
  *             best_move_uci = best_move_obj.uci()
  *             print(
  *                 f"info depth {depth} score {score_str} nodes {info.nodes} "             # <<<<<<<<<<<<<<
  *                 f"nps {nps} time {elapsed_ms} pv {best_move_uci}",
  *                 flush=True,
 */
-      __pyx_t_2 = __Pyx_PyUnicode_From_int(__pyx_v_depth, 0, ' ', 'd'); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 829, __pyx_L1_error)
+      __pyx_t_2 = __Pyx_PyUnicode_From_int(__pyx_v_depth, 0, ' ', 'd'); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 836, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_2);
-      __pyx_t_11 = __Pyx_PyUnicode_From_PY_LONG_LONG(__pyx_v_9engine_cy_info.nodes, 0, ' ', 'd'); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 829, __pyx_L1_error)
+      __pyx_t_11 = __Pyx_PyUnicode_From_PY_LONG_LONG(__pyx_v_9engine_cy_info.nodes, 0, ' ', 'd'); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 836, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_11);
 
-      /* "engine.pyx":830
+      /* "engine.pyx":837
  *             print(
  *                 f"info depth {depth} score {score_str} nodes {info.nodes} "
  *                 f"nps {nps} time {elapsed_ms} pv {best_move_uci}",             # <<<<<<<<<<<<<<
  *                 flush=True,
  *             )
 */
-      __pyx_t_12 = __Pyx_PyObject_FormatSimple(__pyx_v_nps, __pyx_mstate_global->__pyx_empty_unicode); if (unlikely(!__pyx_t_12)) __PYX_ERR(0, 830, __pyx_L1_error)
+      __pyx_t_12 = __Pyx_PyObject_FormatSimple(__pyx_v_nps, __pyx_mstate_global->__pyx_empty_unicode); if (unlikely(!__pyx_t_12)) __PYX_ERR(0, 837, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_12);
-      __pyx_t_13 = __Pyx_PyObject_FormatSimple(__pyx_v_elapsed_ms, __pyx_mstate_global->__pyx_empty_unicode); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 830, __pyx_L1_error)
+      __pyx_t_13 = __Pyx_PyObject_FormatSimple(__pyx_v_elapsed_ms, __pyx_mstate_global->__pyx_empty_unicode); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 837, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_13);
-      __pyx_t_14 = __Pyx_PyObject_FormatSimple(__pyx_v_best_move_uci, __pyx_mstate_global->__pyx_empty_unicode); if (unlikely(!__pyx_t_14)) __PYX_ERR(0, 830, __pyx_L1_error)
+      __pyx_t_14 = __Pyx_PyObject_FormatSimple(__pyx_v_best_move_uci, __pyx_mstate_global->__pyx_empty_unicode); if (unlikely(!__pyx_t_14)) __PYX_ERR(0, 837, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_14);
       __pyx_t_15[0] = __pyx_mstate_global->__pyx_kp_u_info_depth;
       __pyx_t_15[1] = __pyx_t_2;
@@ -8751,7 +8839,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
       __pyx_t_15[10] = __pyx_mstate_global->__pyx_kp_u_pv;
       __pyx_t_15[11] = __pyx_t_14;
 
-      /* "engine.pyx":829
+      /* "engine.pyx":836
  *             best_move_uci = best_move_obj.uci()
  *             print(
  *                 f"info depth {depth} score {score_str} nodes {info.nodes} "             # <<<<<<<<<<<<<<
@@ -8759,7 +8847,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
  *                 flush=True,
 */
       __pyx_t_16 = __Pyx_PyUnicode_Join(__pyx_t_15, 12, 11 + __Pyx_PyUnicode_GET_LENGTH(__pyx_t_2) + 7 * 2 + __Pyx_PyUnicode_GET_LENGTH(__pyx_v_score_str) + __Pyx_PyUnicode_GET_LENGTH(__pyx_t_11) + 5 + __Pyx_PyUnicode_GET_LENGTH(__pyx_t_12) + 6 + __Pyx_PyUnicode_GET_LENGTH(__pyx_t_13) + 4 + __Pyx_PyUnicode_GET_LENGTH(__pyx_t_14), 127 | __Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_v_score_str) | __Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_12) | __Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_13) | __Pyx_PyUnicode_MAX_CHAR_VALUE(__pyx_t_14));
-      if (unlikely(!__pyx_t_16)) __PYX_ERR(0, 829, __pyx_L1_error)
+      if (unlikely(!__pyx_t_16)) __PYX_ERR(0, 836, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_16);
       __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
       __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
@@ -8767,7 +8855,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
       __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
       __Pyx_DECREF(__pyx_t_14); __pyx_t_14 = 0;
 
-      /* "engine.pyx":831
+      /* "engine.pyx":838
  *                 f"info depth {depth} score {score_str} nodes {info.nodes} "
  *                 f"nps {nps} time {elapsed_ms} pv {best_move_uci}",
  *                 flush=True,             # <<<<<<<<<<<<<<
@@ -8777,20 +8865,20 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
       __pyx_t_5 = 1;
       {
         PyObject *__pyx_callargs[2 + ((CYTHON_VECTORCALL) ? 1 : 0)] = {__pyx_t_4, __pyx_t_16};
-        __pyx_t_14 = __Pyx_MakeVectorcallBuilderKwds(1); if (unlikely(!__pyx_t_14)) __PYX_ERR(0, 828, __pyx_L1_error)
+        __pyx_t_14 = __Pyx_MakeVectorcallBuilderKwds(1); if (unlikely(!__pyx_t_14)) __PYX_ERR(0, 835, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_14);
-        if (__Pyx_VectorcallBuilder_AddArg(__pyx_mstate_global->__pyx_n_u_flush, Py_True, __pyx_t_14, __pyx_callargs+2, 0) < 0) __PYX_ERR(0, 828, __pyx_L1_error)
+        if (__Pyx_VectorcallBuilder_AddArg(__pyx_mstate_global->__pyx_n_u_flush, Py_True, __pyx_t_14, __pyx_callargs+2, 0) < 0) __PYX_ERR(0, 835, __pyx_L1_error)
         __pyx_t_3 = __Pyx_Object_Vectorcall_CallFromBuilder(__pyx_t_1, __pyx_callargs+__pyx_t_5, (2-__pyx_t_5) | (__pyx_t_5*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET), __pyx_t_14);
         __Pyx_XDECREF(__pyx_t_4); __pyx_t_4 = 0;
         __Pyx_DECREF(__pyx_t_16); __pyx_t_16 = 0;
         __Pyx_DECREF(__pyx_t_14); __pyx_t_14 = 0;
         __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-        if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 828, __pyx_L1_error)
+        if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 835, __pyx_L1_error)
         __Pyx_GOTREF(__pyx_t_3);
       }
       __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
 
-      /* "engine.pyx":809
+      /* "engine.pyx":816
  *         best_move_so_far = info.root_best_move
  * 
  *         if print_info:             # <<<<<<<<<<<<<<
@@ -8799,7 +8887,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
     }
 
-    /* "engine.pyx":834
+    /* "engine.pyx":841
  *             )
  * 
  *         if time.time() - info.start_time > time_limit * 0.95:             # <<<<<<<<<<<<<<
@@ -8807,9 +8895,9 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
  * 
 */
     __pyx_t_1 = NULL;
-    __Pyx_GetModuleGlobalName(__pyx_t_14, __pyx_mstate_global->__pyx_n_u_time); if (unlikely(!__pyx_t_14)) __PYX_ERR(0, 834, __pyx_L1_error)
+    __Pyx_GetModuleGlobalName(__pyx_t_14, __pyx_mstate_global->__pyx_n_u_time); if (unlikely(!__pyx_t_14)) __PYX_ERR(0, 841, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_14);
-    __pyx_t_16 = __Pyx_PyObject_GetAttrStr(__pyx_t_14, __pyx_mstate_global->__pyx_n_u_time); if (unlikely(!__pyx_t_16)) __PYX_ERR(0, 834, __pyx_L1_error)
+    __pyx_t_16 = __Pyx_PyObject_GetAttrStr(__pyx_t_14, __pyx_mstate_global->__pyx_n_u_time); if (unlikely(!__pyx_t_16)) __PYX_ERR(0, 841, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_16);
     __Pyx_DECREF(__pyx_t_14); __pyx_t_14 = 0;
     __pyx_t_5 = 1;
@@ -8829,25 +8917,25 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
       __pyx_t_3 = __Pyx_PyObject_FastCall(__pyx_t_16, __pyx_callargs+__pyx_t_5, (1-__pyx_t_5) | (__pyx_t_5*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
       __Pyx_XDECREF(__pyx_t_1); __pyx_t_1 = 0;
       __Pyx_DECREF(__pyx_t_16); __pyx_t_16 = 0;
-      if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 834, __pyx_L1_error)
+      if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 841, __pyx_L1_error)
       __Pyx_GOTREF(__pyx_t_3);
     }
-    __pyx_t_16 = PyFloat_FromDouble(__pyx_v_9engine_cy_info.start_time); if (unlikely(!__pyx_t_16)) __PYX_ERR(0, 834, __pyx_L1_error)
+    __pyx_t_16 = PyFloat_FromDouble(__pyx_v_9engine_cy_info.start_time); if (unlikely(!__pyx_t_16)) __PYX_ERR(0, 841, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_16);
-    __pyx_t_1 = PyNumber_Subtract(__pyx_t_3, __pyx_t_16); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 834, __pyx_L1_error)
+    __pyx_t_1 = PyNumber_Subtract(__pyx_t_3, __pyx_t_16); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 841, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_1);
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
     __Pyx_DECREF(__pyx_t_16); __pyx_t_16 = 0;
-    __pyx_t_16 = PyFloat_FromDouble((__pyx_v_time_limit * 0.95)); if (unlikely(!__pyx_t_16)) __PYX_ERR(0, 834, __pyx_L1_error)
+    __pyx_t_16 = PyFloat_FromDouble((__pyx_v_time_limit * 0.95)); if (unlikely(!__pyx_t_16)) __PYX_ERR(0, 841, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_16);
-    __pyx_t_3 = PyObject_RichCompare(__pyx_t_1, __pyx_t_16, Py_GT); __Pyx_XGOTREF(__pyx_t_3); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 834, __pyx_L1_error)
+    __pyx_t_3 = PyObject_RichCompare(__pyx_t_1, __pyx_t_16, Py_GT); __Pyx_XGOTREF(__pyx_t_3); if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 841, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
     __Pyx_DECREF(__pyx_t_16); __pyx_t_16 = 0;
-    __pyx_t_7 = __Pyx_PyObject_IsTrue(__pyx_t_3); if (unlikely((__pyx_t_7 < 0))) __PYX_ERR(0, 834, __pyx_L1_error)
+    __pyx_t_7 = __Pyx_PyObject_IsTrue(__pyx_t_3); if (unlikely((__pyx_t_7 < 0))) __PYX_ERR(0, 841, __pyx_L1_error)
     __Pyx_DECREF(__pyx_t_3); __pyx_t_3 = 0;
     if (__pyx_t_7) {
 
-      /* "engine.pyx":835
+      /* "engine.pyx":842
  * 
  *         if time.time() - info.start_time > time_limit * 0.95:
  *             break             # <<<<<<<<<<<<<<
@@ -8856,7 +8944,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
       goto __pyx_L5_break;
 
-      /* "engine.pyx":834
+      /* "engine.pyx":841
  *             )
  * 
  *         if time.time() - info.start_time > time_limit * 0.95:             # <<<<<<<<<<<<<<
@@ -8865,7 +8953,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
 */
     }
 
-    /* "engine.pyx":837
+    /* "engine.pyx":844
  *             break
  * 
  *         depth += 1             # <<<<<<<<<<<<<<
@@ -8876,7 +8964,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
   }
   __pyx_L5_break:;
 
-  /* "engine.pyx":839
+  /* "engine.pyx":846
  *         depth += 1
  * 
  *     return board.to_chess_move(best_move_so_far)             # <<<<<<<<<<<<<<
@@ -8886,7 +8974,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
   __Pyx_XDECREF(__pyx_r);
   __pyx_t_16 = ((PyObject *)__pyx_v_board);
   __Pyx_INCREF(__pyx_t_16);
-  __pyx_t_1 = __Pyx_PyLong_From_int(__pyx_v_best_move_so_far); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 839, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyLong_From_int(__pyx_v_best_move_so_far); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 846, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_t_5 = 0;
   {
@@ -8894,14 +8982,14 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
     __pyx_t_3 = __Pyx_PyObject_FastCallMethod(__pyx_mstate_global->__pyx_n_u_to_chess_move, __pyx_callargs+__pyx_t_5, (2-__pyx_t_5) | (1*__Pyx_PY_VECTORCALL_ARGUMENTS_OFFSET));
     __Pyx_XDECREF(__pyx_t_16); __pyx_t_16 = 0;
     __Pyx_DECREF(__pyx_t_1); __pyx_t_1 = 0;
-    if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 839, __pyx_L1_error)
+    if (unlikely(!__pyx_t_3)) __PYX_ERR(0, 846, __pyx_L1_error)
     __Pyx_GOTREF(__pyx_t_3);
   }
   __pyx_r = __pyx_t_3;
   __pyx_t_3 = 0;
   goto __pyx_L0;
 
-  /* "engine.pyx":721
+  /* "engine.pyx":728
  * 
  * # --- Main Engine API ---
  * def get_best_move_cy(             # <<<<<<<<<<<<<<
@@ -8937,7 +9025,7 @@ static PyObject *__pyx_pf_9engine_cy_2get_best_move_cy(CYTHON_UNUSED PyObject *_
   return __pyx_r;
 }
 
-/* "engine.pyx":841
+/* "engine.pyx":848
  *     return board.to_chess_move(best_move_so_far)
  * 
  * def get_nodes():             # <<<<<<<<<<<<<<
@@ -8970,7 +9058,7 @@ static PyObject *__pyx_pf_9engine_cy_4get_nodes(CYTHON_UNUSED PyObject *__pyx_se
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("get_nodes", 0);
 
-  /* "engine.pyx":842
+  /* "engine.pyx":849
  * 
  * def get_nodes():
  *     return info.nodes             # <<<<<<<<<<<<<<
@@ -8978,13 +9066,13 @@ static PyObject *__pyx_pf_9engine_cy_4get_nodes(CYTHON_UNUSED PyObject *__pyx_se
  * def set_nodes(long long val):
 */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __Pyx_PyLong_From_PY_LONG_LONG(__pyx_v_9engine_cy_info.nodes); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 842, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyLong_From_PY_LONG_LONG(__pyx_v_9engine_cy_info.nodes); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 849, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "engine.pyx":841
+  /* "engine.pyx":848
  *     return board.to_chess_move(best_move_so_far)
  * 
  * def get_nodes():             # <<<<<<<<<<<<<<
@@ -9003,7 +9091,7 @@ static PyObject *__pyx_pf_9engine_cy_4get_nodes(CYTHON_UNUSED PyObject *__pyx_se
   return __pyx_r;
 }
 
-/* "engine.pyx":844
+/* "engine.pyx":851
  *     return info.nodes
  * 
  * def set_nodes(long long val):             # <<<<<<<<<<<<<<
@@ -9050,32 +9138,32 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_val,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len) < 0) __PYX_ERR(0, 844, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len) < 0) __PYX_ERR(0, 851, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 844, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 851, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "set_nodes", 0) < 0) __PYX_ERR(0, 844, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "set_nodes", 0) < 0) __PYX_ERR(0, 851, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 1; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("set_nodes", 1, 1, 1, i); __PYX_ERR(0, 844, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("set_nodes", 1, 1, 1, i); __PYX_ERR(0, 851, __pyx_L3_error) }
       }
     } else if (unlikely(__pyx_nargs != 1)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 844, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 851, __pyx_L3_error)
     }
-    __pyx_v_val = __Pyx_PyLong_As_PY_LONG_LONG(values[0]); if (unlikely((__pyx_v_val == (PY_LONG_LONG)-1) && PyErr_Occurred())) __PYX_ERR(0, 844, __pyx_L3_error)
+    __pyx_v_val = __Pyx_PyLong_As_PY_LONG_LONG(values[0]); if (unlikely((__pyx_v_val == (PY_LONG_LONG)-1) && PyErr_Occurred())) __PYX_ERR(0, 851, __pyx_L3_error)
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("set_nodes", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 844, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("set_nodes", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 851, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -9101,7 +9189,7 @@ static PyObject *__pyx_pf_9engine_cy_6set_nodes(CYTHON_UNUSED PyObject *__pyx_se
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("set_nodes", 0);
 
-  /* "engine.pyx":846
+  /* "engine.pyx":853
  * def set_nodes(long long val):
  *     global info
  *     info.nodes = val             # <<<<<<<<<<<<<<
@@ -9110,7 +9198,7 @@ static PyObject *__pyx_pf_9engine_cy_6set_nodes(CYTHON_UNUSED PyObject *__pyx_se
 */
   __pyx_v_9engine_cy_info.nodes = __pyx_v_val;
 
-  /* "engine.pyx":844
+  /* "engine.pyx":851
  *     return info.nodes
  * 
  * def set_nodes(long long val):             # <<<<<<<<<<<<<<
@@ -9125,7 +9213,7 @@ static PyObject *__pyx_pf_9engine_cy_6set_nodes(CYTHON_UNUSED PyObject *__pyx_se
   return __pyx_r;
 }
 
-/* "engine.pyx":848
+/* "engine.pyx":855
  *     info.nodes = val
  * 
  * def get_depth():             # <<<<<<<<<<<<<<
@@ -9158,7 +9246,7 @@ static PyObject *__pyx_pf_9engine_cy_8get_depth(CYTHON_UNUSED PyObject *__pyx_se
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("get_depth", 0);
 
-  /* "engine.pyx":849
+  /* "engine.pyx":856
  * 
  * def get_depth():
  *     return info.current_depth             # <<<<<<<<<<<<<<
@@ -9166,13 +9254,13 @@ static PyObject *__pyx_pf_9engine_cy_8get_depth(CYTHON_UNUSED PyObject *__pyx_se
  * def set_depth(int val):
 */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __Pyx_PyLong_From_int(__pyx_v_9engine_cy_info.current_depth); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 849, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyLong_From_int(__pyx_v_9engine_cy_info.current_depth); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 856, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "engine.pyx":848
+  /* "engine.pyx":855
  *     info.nodes = val
  * 
  * def get_depth():             # <<<<<<<<<<<<<<
@@ -9191,7 +9279,7 @@ static PyObject *__pyx_pf_9engine_cy_8get_depth(CYTHON_UNUSED PyObject *__pyx_se
   return __pyx_r;
 }
 
-/* "engine.pyx":851
+/* "engine.pyx":858
  *     return info.current_depth
  * 
  * def set_depth(int val):             # <<<<<<<<<<<<<<
@@ -9238,32 +9326,32 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_val,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len) < 0) __PYX_ERR(0, 851, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len) < 0) __PYX_ERR(0, 858, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 851, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 858, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "set_depth", 0) < 0) __PYX_ERR(0, 851, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "set_depth", 0) < 0) __PYX_ERR(0, 858, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 1; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("set_depth", 1, 1, 1, i); __PYX_ERR(0, 851, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("set_depth", 1, 1, 1, i); __PYX_ERR(0, 858, __pyx_L3_error) }
       }
     } else if (unlikely(__pyx_nargs != 1)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 851, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 858, __pyx_L3_error)
     }
-    __pyx_v_val = __Pyx_PyLong_As_int(values[0]); if (unlikely((__pyx_v_val == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 851, __pyx_L3_error)
+    __pyx_v_val = __Pyx_PyLong_As_int(values[0]); if (unlikely((__pyx_v_val == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 858, __pyx_L3_error)
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("set_depth", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 851, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("set_depth", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 858, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -9289,7 +9377,7 @@ static PyObject *__pyx_pf_9engine_cy_10set_depth(CYTHON_UNUSED PyObject *__pyx_s
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("set_depth", 0);
 
-  /* "engine.pyx":853
+  /* "engine.pyx":860
  * def set_depth(int val):
  *     global info
  *     info.current_depth = val             # <<<<<<<<<<<<<<
@@ -9298,7 +9386,7 @@ static PyObject *__pyx_pf_9engine_cy_10set_depth(CYTHON_UNUSED PyObject *__pyx_s
 */
   __pyx_v_9engine_cy_info.current_depth = __pyx_v_val;
 
-  /* "engine.pyx":851
+  /* "engine.pyx":858
  *     return info.current_depth
  * 
  * def set_depth(int val):             # <<<<<<<<<<<<<<
@@ -9313,7 +9401,7 @@ static PyObject *__pyx_pf_9engine_cy_10set_depth(CYTHON_UNUSED PyObject *__pyx_s
   return __pyx_r;
 }
 
-/* "engine.pyx":855
+/* "engine.pyx":862
  *     info.current_depth = val
  * 
  * def get_stop():             # <<<<<<<<<<<<<<
@@ -9346,7 +9434,7 @@ static PyObject *__pyx_pf_9engine_cy_12get_stop(CYTHON_UNUSED PyObject *__pyx_se
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("get_stop", 0);
 
-  /* "engine.pyx":856
+  /* "engine.pyx":863
  * 
  * def get_stop():
  *     return info.stop             # <<<<<<<<<<<<<<
@@ -9354,13 +9442,13 @@ static PyObject *__pyx_pf_9engine_cy_12get_stop(CYTHON_UNUSED PyObject *__pyx_se
  * def set_stop(bint val):
 */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = __Pyx_PyBool_FromLong(__pyx_v_9engine_cy_info.stop); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 856, __pyx_L1_error)
+  __pyx_t_1 = __Pyx_PyBool_FromLong(__pyx_v_9engine_cy_info.stop); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 863, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "engine.pyx":855
+  /* "engine.pyx":862
  *     info.current_depth = val
  * 
  * def get_stop():             # <<<<<<<<<<<<<<
@@ -9379,7 +9467,7 @@ static PyObject *__pyx_pf_9engine_cy_12get_stop(CYTHON_UNUSED PyObject *__pyx_se
   return __pyx_r;
 }
 
-/* "engine.pyx":858
+/* "engine.pyx":865
  *     return info.stop
  * 
  * def set_stop(bint val):             # <<<<<<<<<<<<<<
@@ -9426,32 +9514,32 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_val,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len) < 0) __PYX_ERR(0, 858, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len) < 0) __PYX_ERR(0, 865, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 858, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 865, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "set_stop", 0) < 0) __PYX_ERR(0, 858, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "set_stop", 0) < 0) __PYX_ERR(0, 865, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 1; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("set_stop", 1, 1, 1, i); __PYX_ERR(0, 858, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("set_stop", 1, 1, 1, i); __PYX_ERR(0, 865, __pyx_L3_error) }
       }
     } else if (unlikely(__pyx_nargs != 1)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 858, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 865, __pyx_L3_error)
     }
-    __pyx_v_val = __Pyx_PyObject_IsTrue(values[0]); if (unlikely((__pyx_v_val == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 858, __pyx_L3_error)
+    __pyx_v_val = __Pyx_PyObject_IsTrue(values[0]); if (unlikely((__pyx_v_val == (int)-1) && PyErr_Occurred())) __PYX_ERR(0, 865, __pyx_L3_error)
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("set_stop", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 858, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("set_stop", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 865, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -9477,7 +9565,7 @@ static PyObject *__pyx_pf_9engine_cy_14set_stop(CYTHON_UNUSED PyObject *__pyx_se
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("set_stop", 0);
 
-  /* "engine.pyx":860
+  /* "engine.pyx":867
  * def set_stop(bint val):
  *     global info
  *     info.stop = val             # <<<<<<<<<<<<<<
@@ -9486,7 +9574,7 @@ static PyObject *__pyx_pf_9engine_cy_14set_stop(CYTHON_UNUSED PyObject *__pyx_se
 */
   __pyx_v_9engine_cy_info.stop = __pyx_v_val;
 
-  /* "engine.pyx":858
+  /* "engine.pyx":865
  *     return info.stop
  * 
  * def set_stop(bint val):             # <<<<<<<<<<<<<<
@@ -9501,7 +9589,7 @@ static PyObject *__pyx_pf_9engine_cy_14set_stop(CYTHON_UNUSED PyObject *__pyx_se
   return __pyx_r;
 }
 
-/* "engine.pyx":862
+/* "engine.pyx":869
  *     info.stop = val
  * 
  * def get_start_time():             # <<<<<<<<<<<<<<
@@ -9534,7 +9622,7 @@ static PyObject *__pyx_pf_9engine_cy_16get_start_time(CYTHON_UNUSED PyObject *__
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("get_start_time", 0);
 
-  /* "engine.pyx":863
+  /* "engine.pyx":870
  * 
  * def get_start_time():
  *     return info.start_time             # <<<<<<<<<<<<<<
@@ -9542,13 +9630,13 @@ static PyObject *__pyx_pf_9engine_cy_16get_start_time(CYTHON_UNUSED PyObject *__
  * def set_start_time(double val):
 */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = PyFloat_FromDouble(__pyx_v_9engine_cy_info.start_time); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 863, __pyx_L1_error)
+  __pyx_t_1 = PyFloat_FromDouble(__pyx_v_9engine_cy_info.start_time); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 870, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "engine.pyx":862
+  /* "engine.pyx":869
  *     info.stop = val
  * 
  * def get_start_time():             # <<<<<<<<<<<<<<
@@ -9567,7 +9655,7 @@ static PyObject *__pyx_pf_9engine_cy_16get_start_time(CYTHON_UNUSED PyObject *__
   return __pyx_r;
 }
 
-/* "engine.pyx":865
+/* "engine.pyx":872
  *     return info.start_time
  * 
  * def set_start_time(double val):             # <<<<<<<<<<<<<<
@@ -9614,32 +9702,32 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_val,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len) < 0) __PYX_ERR(0, 865, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len) < 0) __PYX_ERR(0, 872, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 865, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 872, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "set_start_time", 0) < 0) __PYX_ERR(0, 865, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "set_start_time", 0) < 0) __PYX_ERR(0, 872, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 1; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("set_start_time", 1, 1, 1, i); __PYX_ERR(0, 865, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("set_start_time", 1, 1, 1, i); __PYX_ERR(0, 872, __pyx_L3_error) }
       }
     } else if (unlikely(__pyx_nargs != 1)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 865, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 872, __pyx_L3_error)
     }
-    __pyx_v_val = __Pyx_PyFloat_AsDouble(values[0]); if (unlikely((__pyx_v_val == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 865, __pyx_L3_error)
+    __pyx_v_val = __Pyx_PyFloat_AsDouble(values[0]); if (unlikely((__pyx_v_val == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 872, __pyx_L3_error)
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("set_start_time", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 865, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("set_start_time", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 872, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -9665,7 +9753,7 @@ static PyObject *__pyx_pf_9engine_cy_18set_start_time(CYTHON_UNUSED PyObject *__
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("set_start_time", 0);
 
-  /* "engine.pyx":867
+  /* "engine.pyx":874
  * def set_start_time(double val):
  *     global info
  *     info.start_time = val             # <<<<<<<<<<<<<<
@@ -9674,7 +9762,7 @@ static PyObject *__pyx_pf_9engine_cy_18set_start_time(CYTHON_UNUSED PyObject *__
 */
   __pyx_v_9engine_cy_info.start_time = __pyx_v_val;
 
-  /* "engine.pyx":865
+  /* "engine.pyx":872
  *     return info.start_time
  * 
  * def set_start_time(double val):             # <<<<<<<<<<<<<<
@@ -9689,7 +9777,7 @@ static PyObject *__pyx_pf_9engine_cy_18set_start_time(CYTHON_UNUSED PyObject *__
   return __pyx_r;
 }
 
-/* "engine.pyx":869
+/* "engine.pyx":876
  *     info.start_time = val
  * 
  * def get_time_limit():             # <<<<<<<<<<<<<<
@@ -9722,7 +9810,7 @@ static PyObject *__pyx_pf_9engine_cy_20get_time_limit(CYTHON_UNUSED PyObject *__
   int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("get_time_limit", 0);
 
-  /* "engine.pyx":870
+  /* "engine.pyx":877
  * 
  * def get_time_limit():
  *     return info.time_limit             # <<<<<<<<<<<<<<
@@ -9730,13 +9818,13 @@ static PyObject *__pyx_pf_9engine_cy_20get_time_limit(CYTHON_UNUSED PyObject *__
  * def set_time_limit(double val):
 */
   __Pyx_XDECREF(__pyx_r);
-  __pyx_t_1 = PyFloat_FromDouble(__pyx_v_9engine_cy_info.time_limit); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 870, __pyx_L1_error)
+  __pyx_t_1 = PyFloat_FromDouble(__pyx_v_9engine_cy_info.time_limit); if (unlikely(!__pyx_t_1)) __PYX_ERR(0, 877, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_1);
   __pyx_r = __pyx_t_1;
   __pyx_t_1 = 0;
   goto __pyx_L0;
 
-  /* "engine.pyx":869
+  /* "engine.pyx":876
  *     info.start_time = val
  * 
  * def get_time_limit():             # <<<<<<<<<<<<<<
@@ -9755,7 +9843,7 @@ static PyObject *__pyx_pf_9engine_cy_20get_time_limit(CYTHON_UNUSED PyObject *__
   return __pyx_r;
 }
 
-/* "engine.pyx":872
+/* "engine.pyx":879
  *     return info.time_limit
  * 
  * def set_time_limit(double val):             # <<<<<<<<<<<<<<
@@ -9802,32 +9890,32 @@ PyObject *__pyx_args, PyObject *__pyx_kwds
   {
     PyObject ** const __pyx_pyargnames[] = {&__pyx_mstate_global->__pyx_n_u_val,0};
     const Py_ssize_t __pyx_kwds_len = (__pyx_kwds) ? __Pyx_NumKwargs_FASTCALL(__pyx_kwds) : 0;
-    if (unlikely(__pyx_kwds_len) < 0) __PYX_ERR(0, 872, __pyx_L3_error)
+    if (unlikely(__pyx_kwds_len) < 0) __PYX_ERR(0, 879, __pyx_L3_error)
     if (__pyx_kwds_len > 0) {
       switch (__pyx_nargs) {
         case  1:
         values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 872, __pyx_L3_error)
+        if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 879, __pyx_L3_error)
         CYTHON_FALLTHROUGH;
         case  0: break;
         default: goto __pyx_L5_argtuple_error;
       }
       const Py_ssize_t kwd_pos_args = __pyx_nargs;
-      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "set_time_limit", 0) < 0) __PYX_ERR(0, 872, __pyx_L3_error)
+      if (__Pyx_ParseKeywords(__pyx_kwds, __pyx_kwvalues, __pyx_pyargnames, 0, values, kwd_pos_args, __pyx_kwds_len, "set_time_limit", 0) < 0) __PYX_ERR(0, 879, __pyx_L3_error)
       for (Py_ssize_t i = __pyx_nargs; i < 1; i++) {
-        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("set_time_limit", 1, 1, 1, i); __PYX_ERR(0, 872, __pyx_L3_error) }
+        if (unlikely(!values[i])) { __Pyx_RaiseArgtupleInvalid("set_time_limit", 1, 1, 1, i); __PYX_ERR(0, 879, __pyx_L3_error) }
       }
     } else if (unlikely(__pyx_nargs != 1)) {
       goto __pyx_L5_argtuple_error;
     } else {
       values[0] = __Pyx_ArgRef_FASTCALL(__pyx_args, 0);
-      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 872, __pyx_L3_error)
+      if (!CYTHON_ASSUME_SAFE_MACROS && unlikely(!values[0])) __PYX_ERR(0, 879, __pyx_L3_error)
     }
-    __pyx_v_val = __Pyx_PyFloat_AsDouble(values[0]); if (unlikely((__pyx_v_val == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 872, __pyx_L3_error)
+    __pyx_v_val = __Pyx_PyFloat_AsDouble(values[0]); if (unlikely((__pyx_v_val == (double)-1) && PyErr_Occurred())) __PYX_ERR(0, 879, __pyx_L3_error)
   }
   goto __pyx_L6_skip;
   __pyx_L5_argtuple_error:;
-  __Pyx_RaiseArgtupleInvalid("set_time_limit", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 872, __pyx_L3_error)
+  __Pyx_RaiseArgtupleInvalid("set_time_limit", 1, 1, 1, __pyx_nargs); __PYX_ERR(0, 879, __pyx_L3_error)
   __pyx_L6_skip:;
   goto __pyx_L4_argument_unpacking_done;
   __pyx_L3_error:;
@@ -9853,14 +9941,14 @@ static PyObject *__pyx_pf_9engine_cy_22set_time_limit(CYTHON_UNUSED PyObject *__
   __Pyx_RefNannyDeclarations
   __Pyx_RefNannySetupContext("set_time_limit", 0);
 
-  /* "engine.pyx":874
+  /* "engine.pyx":881
  * def set_time_limit(double val):
  *     global info
  *     info.time_limit = val             # <<<<<<<<<<<<<<
 */
   __pyx_v_9engine_cy_info.time_limit = __pyx_v_val;
 
-  /* "engine.pyx":872
+  /* "engine.pyx":879
  *     return info.time_limit
  * 
  * def set_time_limit(double val):             # <<<<<<<<<<<<<<
@@ -11110,178 +11198,178 @@ __Pyx_RefNannySetupContext("PyInit_engine_cy", 0);
   if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_clear_tt, __pyx_t_2) < 0) __PYX_ERR(0, 281, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
 
-  /* "engine.pyx":723
+  /* "engine.pyx":730
  * def get_best_move_cy(
  *     object chess_board,
  *     double time_limit = 1.0,             # <<<<<<<<<<<<<<
  *     int depth_limit = 0,
  *     bint print_info = False,
 */
-  __pyx_t_2 = PyFloat_FromDouble(((double)1.0)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 723, __pyx_L1_error)
+  __pyx_t_2 = PyFloat_FromDouble(((double)1.0)); if (unlikely(!__pyx_t_2)) __PYX_ERR(0, 730, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_2);
 
-  /* "engine.pyx":724
+  /* "engine.pyx":731
  *     object chess_board,
  *     double time_limit = 1.0,
  *     int depth_limit = 0,             # <<<<<<<<<<<<<<
  *     bint print_info = False,
  * ) -> object:
 */
-  __pyx_t_11 = __Pyx_PyLong_From_int(((int)0)); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 724, __pyx_L1_error)
+  __pyx_t_11 = __Pyx_PyLong_From_int(((int)0)); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 731, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_11);
 
-  /* "engine.pyx":725
+  /* "engine.pyx":732
  *     double time_limit = 1.0,
  *     int depth_limit = 0,
  *     bint print_info = False,             # <<<<<<<<<<<<<<
  * ) -> object:
  *     """Finds the best move using iterative deepening search (Cython compiled)."""
 */
-  __pyx_t_12 = __Pyx_PyBool_FromLong(((int)0)); if (unlikely(!__pyx_t_12)) __PYX_ERR(0, 725, __pyx_L1_error)
+  __pyx_t_12 = __Pyx_PyBool_FromLong(((int)0)); if (unlikely(!__pyx_t_12)) __PYX_ERR(0, 732, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_12);
 
-  /* "engine.pyx":721
+  /* "engine.pyx":728
  * 
  * # --- Main Engine API ---
  * def get_best_move_cy(             # <<<<<<<<<<<<<<
  *     object chess_board,
  *     double time_limit = 1.0,
 */
-  __pyx_t_13 = PyTuple_Pack(3, __pyx_t_2, __pyx_t_11, __pyx_t_12); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 721, __pyx_L1_error)
+  __pyx_t_13 = PyTuple_Pack(3, __pyx_t_2, __pyx_t_11, __pyx_t_12); if (unlikely(!__pyx_t_13)) __PYX_ERR(0, 728, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_13);
   __Pyx_DECREF(__pyx_t_2); __pyx_t_2 = 0;
   __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
   __Pyx_DECREF(__pyx_t_12); __pyx_t_12 = 0;
-  __pyx_t_12 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_12)) __PYX_ERR(0, 721, __pyx_L1_error)
+  __pyx_t_12 = __Pyx_PyDict_NewPresized(1); if (unlikely(!__pyx_t_12)) __PYX_ERR(0, 728, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_12);
-  if (PyDict_SetItem(__pyx_t_12, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_object) < 0) __PYX_ERR(0, 721, __pyx_L1_error)
-  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_3get_best_move_cy, 0, __pyx_mstate_global->__pyx_n_u_get_best_move_cy, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[1])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 721, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_t_12, __pyx_mstate_global->__pyx_n_u_return, __pyx_mstate_global->__pyx_n_u_object) < 0) __PYX_ERR(0, 728, __pyx_L1_error)
+  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_3get_best_move_cy, 0, __pyx_mstate_global->__pyx_n_u_get_best_move_cy, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[1])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 728, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_11);
   __Pyx_CyFunction_SetDefaultsTuple(__pyx_t_11, __pyx_t_13);
   __Pyx_CyFunction_SetAnnotationsDict(__pyx_t_11, __pyx_t_12);
   __Pyx_DECREF(__pyx_t_13); __pyx_t_13 = 0;
   __Pyx_DECREF(__pyx_t_12); __pyx_t_12 = 0;
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_get_best_move_cy, __pyx_t_11) < 0) __PYX_ERR(0, 721, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_get_best_move_cy, __pyx_t_11) < 0) __PYX_ERR(0, 728, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
 
-  /* "engine.pyx":841
+  /* "engine.pyx":848
  *     return board.to_chess_move(best_move_so_far)
  * 
  * def get_nodes():             # <<<<<<<<<<<<<<
  *     return info.nodes
  * 
 */
-  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_5get_nodes, 0, __pyx_mstate_global->__pyx_n_u_get_nodes, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[2])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 841, __pyx_L1_error)
+  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_5get_nodes, 0, __pyx_mstate_global->__pyx_n_u_get_nodes, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[2])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 848, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_11);
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_get_nodes, __pyx_t_11) < 0) __PYX_ERR(0, 841, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_get_nodes, __pyx_t_11) < 0) __PYX_ERR(0, 848, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
 
-  /* "engine.pyx":844
+  /* "engine.pyx":851
  *     return info.nodes
  * 
  * def set_nodes(long long val):             # <<<<<<<<<<<<<<
  *     global info
  *     info.nodes = val
 */
-  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_7set_nodes, 0, __pyx_mstate_global->__pyx_n_u_set_nodes, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[3])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 844, __pyx_L1_error)
+  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_7set_nodes, 0, __pyx_mstate_global->__pyx_n_u_set_nodes, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[3])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 851, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_11);
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_set_nodes, __pyx_t_11) < 0) __PYX_ERR(0, 844, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_set_nodes, __pyx_t_11) < 0) __PYX_ERR(0, 851, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
 
-  /* "engine.pyx":848
+  /* "engine.pyx":855
  *     info.nodes = val
  * 
  * def get_depth():             # <<<<<<<<<<<<<<
  *     return info.current_depth
  * 
 */
-  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_9get_depth, 0, __pyx_mstate_global->__pyx_n_u_get_depth, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[4])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 848, __pyx_L1_error)
+  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_9get_depth, 0, __pyx_mstate_global->__pyx_n_u_get_depth, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[4])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 855, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_11);
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_get_depth, __pyx_t_11) < 0) __PYX_ERR(0, 848, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_get_depth, __pyx_t_11) < 0) __PYX_ERR(0, 855, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
 
-  /* "engine.pyx":851
+  /* "engine.pyx":858
  *     return info.current_depth
  * 
  * def set_depth(int val):             # <<<<<<<<<<<<<<
  *     global info
  *     info.current_depth = val
 */
-  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_11set_depth, 0, __pyx_mstate_global->__pyx_n_u_set_depth, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[5])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 851, __pyx_L1_error)
+  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_11set_depth, 0, __pyx_mstate_global->__pyx_n_u_set_depth, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[5])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 858, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_11);
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_set_depth, __pyx_t_11) < 0) __PYX_ERR(0, 851, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_set_depth, __pyx_t_11) < 0) __PYX_ERR(0, 858, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
 
-  /* "engine.pyx":855
+  /* "engine.pyx":862
  *     info.current_depth = val
  * 
  * def get_stop():             # <<<<<<<<<<<<<<
  *     return info.stop
  * 
 */
-  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_13get_stop, 0, __pyx_mstate_global->__pyx_n_u_get_stop, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[6])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 855, __pyx_L1_error)
+  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_13get_stop, 0, __pyx_mstate_global->__pyx_n_u_get_stop, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[6])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 862, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_11);
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_get_stop, __pyx_t_11) < 0) __PYX_ERR(0, 855, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_get_stop, __pyx_t_11) < 0) __PYX_ERR(0, 862, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
 
-  /* "engine.pyx":858
+  /* "engine.pyx":865
  *     return info.stop
  * 
  * def set_stop(bint val):             # <<<<<<<<<<<<<<
  *     global info
  *     info.stop = val
 */
-  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_15set_stop, 0, __pyx_mstate_global->__pyx_n_u_set_stop, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[7])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 858, __pyx_L1_error)
+  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_15set_stop, 0, __pyx_mstate_global->__pyx_n_u_set_stop, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[7])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 865, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_11);
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_set_stop, __pyx_t_11) < 0) __PYX_ERR(0, 858, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_set_stop, __pyx_t_11) < 0) __PYX_ERR(0, 865, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
 
-  /* "engine.pyx":862
+  /* "engine.pyx":869
  *     info.stop = val
  * 
  * def get_start_time():             # <<<<<<<<<<<<<<
  *     return info.start_time
  * 
 */
-  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_17get_start_time, 0, __pyx_mstate_global->__pyx_n_u_get_start_time, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[8])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 862, __pyx_L1_error)
+  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_17get_start_time, 0, __pyx_mstate_global->__pyx_n_u_get_start_time, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[8])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 869, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_11);
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_get_start_time, __pyx_t_11) < 0) __PYX_ERR(0, 862, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_get_start_time, __pyx_t_11) < 0) __PYX_ERR(0, 869, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
 
-  /* "engine.pyx":865
+  /* "engine.pyx":872
  *     return info.start_time
  * 
  * def set_start_time(double val):             # <<<<<<<<<<<<<<
  *     global info
  *     info.start_time = val
 */
-  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_19set_start_time, 0, __pyx_mstate_global->__pyx_n_u_set_start_time, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[9])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 865, __pyx_L1_error)
+  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_19set_start_time, 0, __pyx_mstate_global->__pyx_n_u_set_start_time, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[9])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 872, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_11);
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_set_start_time, __pyx_t_11) < 0) __PYX_ERR(0, 865, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_set_start_time, __pyx_t_11) < 0) __PYX_ERR(0, 872, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
 
-  /* "engine.pyx":869
+  /* "engine.pyx":876
  *     info.start_time = val
  * 
  * def get_time_limit():             # <<<<<<<<<<<<<<
  *     return info.time_limit
  * 
 */
-  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_21get_time_limit, 0, __pyx_mstate_global->__pyx_n_u_get_time_limit, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[10])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 869, __pyx_L1_error)
+  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_21get_time_limit, 0, __pyx_mstate_global->__pyx_n_u_get_time_limit, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[10])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 876, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_11);
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_get_time_limit, __pyx_t_11) < 0) __PYX_ERR(0, 869, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_get_time_limit, __pyx_t_11) < 0) __PYX_ERR(0, 876, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
 
-  /* "engine.pyx":872
+  /* "engine.pyx":879
  *     return info.time_limit
  * 
  * def set_time_limit(double val):             # <<<<<<<<<<<<<<
  *     global info
  *     info.time_limit = val
 */
-  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_23set_time_limit, 0, __pyx_mstate_global->__pyx_n_u_set_time_limit, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[11])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 872, __pyx_L1_error)
+  __pyx_t_11 = __Pyx_CyFunction_New(&__pyx_mdef_9engine_cy_23set_time_limit, 0, __pyx_mstate_global->__pyx_n_u_set_time_limit, NULL, __pyx_mstate_global->__pyx_n_u_engine_cy, __pyx_mstate_global->__pyx_d, ((PyObject *)__pyx_mstate_global->__pyx_codeobj_tab[11])); if (unlikely(!__pyx_t_11)) __PYX_ERR(0, 879, __pyx_L1_error)
   __Pyx_GOTREF(__pyx_t_11);
-  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_set_time_limit, __pyx_t_11) < 0) __PYX_ERR(0, 872, __pyx_L1_error)
+  if (PyDict_SetItem(__pyx_mstate_global->__pyx_d, __pyx_mstate_global->__pyx_n_u_set_time_limit, __pyx_t_11) < 0) __PYX_ERR(0, 879, __pyx_L1_error)
   __Pyx_DECREF(__pyx_t_11); __pyx_t_11 = 0;
 
   /* "engine.pyx":1
@@ -11439,7 +11527,7 @@ static int __Pyx_InitStrings(__Pyx_StringTabEntry const *t, PyObject **target, c
 static int __Pyx_InitCachedBuiltins(__pyx_mstatetype *__pyx_mstate) {
   CYTHON_UNUSED_VAR(__pyx_mstate);
   __pyx_builtin_range = __Pyx_GetBuiltinName(__pyx_mstate->__pyx_n_u_range); if (!__pyx_builtin_range) __PYX_ERR(0, 152, __pyx_L1_error)
-  __pyx_builtin_print = __Pyx_GetBuiltinName(__pyx_mstate->__pyx_n_u_print); if (!__pyx_builtin_print) __PYX_ERR(0, 828, __pyx_L1_error)
+  __pyx_builtin_print = __Pyx_GetBuiltinName(__pyx_mstate->__pyx_n_u_print); if (!__pyx_builtin_print) __PYX_ERR(0, 835, __pyx_L1_error)
   return 0;
   __pyx_L1_error:;
   return -1;
@@ -11500,57 +11588,57 @@ static int __Pyx_CreateCodeObjects(__pyx_mstatetype *__pyx_mstate) {
     __pyx_mstate_global->__pyx_codeobj_tab[0] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_engine_pyx, __pyx_mstate->__pyx_n_u_clear_tt, __pyx_k_5_7, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[0])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {4, 0, 0, 25, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 721, 784};
+    const __Pyx_PyCode_New_function_description descr = {4, 0, 0, 25, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 728, 784};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_chess_board, __pyx_mstate->__pyx_n_u_time_limit, __pyx_mstate->__pyx_n_u_depth_limit, __pyx_mstate->__pyx_n_u_print_info, __pyx_mstate->__pyx_n_u_board, __pyx_mstate->__pyx_n_u_legal_moves, __pyx_mstate->__pyx_n_u_best_move_so_far, __pyx_mstate->__pyx_n_u_color, __pyx_mstate->__pyx_n_u_depth, __pyx_mstate->__pyx_n_u_key, __pyx_mstate->__pyx_n_u_idx, __pyx_mstate->__pyx_n_u_entry, __pyx_mstate->__pyx_n_u_score_2, __pyx_mstate->__pyx_n_u_delta, __pyx_mstate->__pyx_n_u_last_score, __pyx_mstate->__pyx_n_u_alpha_aw, __pyx_mstate->__pyx_n_u_beta_aw, __pyx_mstate->__pyx_n_u_mate_plies, __pyx_mstate->__pyx_n_u_mate_moves, __pyx_mstate->__pyx_n_u_score_str, __pyx_mstate->__pyx_n_u_elapsed, __pyx_mstate->__pyx_n_u_elapsed_ms, __pyx_mstate->__pyx_n_u_nps_2, __pyx_mstate->__pyx_n_u_best_move_obj, __pyx_mstate->__pyx_n_u_best_move_uci};
     __pyx_mstate_global->__pyx_codeobj_tab[1] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_engine_pyx, __pyx_mstate->__pyx_n_u_get_best_move_cy, __pyx_k_d_q_a_88I_G1_WA_y_1_A_q_E_V1A_6, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[1])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {0, 0, 0, 0, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 841, 9};
+    const __Pyx_PyCode_New_function_description descr = {0, 0, 0, 0, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 848, 9};
     PyObject* const varnames[] = {0};
     __pyx_mstate_global->__pyx_codeobj_tab[2] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_engine_pyx, __pyx_mstate->__pyx_n_u_get_nodes, __pyx_k_4q, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[2])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 844, 12};
+    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 851, 12};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_val};
     __pyx_mstate_global->__pyx_codeobj_tab[3] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_engine_pyx, __pyx_mstate->__pyx_n_u_set_nodes, __pyx_k__2, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[3])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {0, 0, 0, 0, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 848, 9};
+    const __Pyx_PyCode_New_function_description descr = {0, 0, 0, 0, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 855, 9};
     PyObject* const varnames[] = {0};
     __pyx_mstate_global->__pyx_codeobj_tab[4] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_engine_pyx, __pyx_mstate->__pyx_n_u_get_depth, __pyx_k_4q, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[4])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 851, 13};
+    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 858, 13};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_val};
     __pyx_mstate_global->__pyx_codeobj_tab[5] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_engine_pyx, __pyx_mstate->__pyx_n_u_set_depth, __pyx_k__3, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[5])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {0, 0, 0, 0, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 855, 9};
+    const __Pyx_PyCode_New_function_description descr = {0, 0, 0, 0, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 862, 9};
     PyObject* const varnames[] = {0};
     __pyx_mstate_global->__pyx_codeobj_tab[6] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_engine_pyx, __pyx_mstate->__pyx_n_u_get_stop, __pyx_k_4q, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[6])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 858, 12};
+    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 865, 12};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_val};
     __pyx_mstate_global->__pyx_codeobj_tab[7] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_engine_pyx, __pyx_mstate->__pyx_n_u_set_stop, __pyx_k__4, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[7])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {0, 0, 0, 0, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 862, 9};
+    const __Pyx_PyCode_New_function_description descr = {0, 0, 0, 0, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 869, 9};
     PyObject* const varnames[] = {0};
     __pyx_mstate_global->__pyx_codeobj_tab[8] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_engine_pyx, __pyx_mstate->__pyx_n_u_get_start_time, __pyx_k_4q, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[8])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 865, 12};
+    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 872, 12};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_val};
     __pyx_mstate_global->__pyx_codeobj_tab[9] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_engine_pyx, __pyx_mstate->__pyx_n_u_set_start_time, __pyx_k_a, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[9])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {0, 0, 0, 0, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 869, 9};
+    const __Pyx_PyCode_New_function_description descr = {0, 0, 0, 0, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 876, 9};
     PyObject* const varnames[] = {0};
     __pyx_mstate_global->__pyx_codeobj_tab[10] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_engine_pyx, __pyx_mstate->__pyx_n_u_get_time_limit, __pyx_k_4q, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[10])) goto bad;
   }
   {
-    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 872, 12};
+    const __Pyx_PyCode_New_function_description descr = {1, 0, 0, 1, (unsigned int)(CO_OPTIMIZED|CO_NEWLOCALS), 879, 12};
     PyObject* const varnames[] = {__pyx_mstate->__pyx_n_u_val};
     __pyx_mstate_global->__pyx_codeobj_tab[11] = __Pyx_PyCode_New(descr, varnames, __pyx_mstate->__pyx_kp_u_engine_pyx, __pyx_mstate->__pyx_n_u_set_time_limit, __pyx_k_a, tuple_dedup_map); if (unlikely(!__pyx_mstate_global->__pyx_codeobj_tab[11])) goto bad;
   }
