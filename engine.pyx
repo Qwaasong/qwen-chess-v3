@@ -28,8 +28,9 @@ PIECE_VALUES[4] = 900
 PIECE_VALUES[5] = 0
 
 # PST Tables
-cdef int PAWN_TABLE[64]
-PAWN_TABLE[:] = [
+# PST Tables
+cdef int PAWN_TABLE_MG[64]
+PAWN_TABLE_MG[:] = [
     0,  0,  0,  0,  0,  0,  0,  0,
     50, 50, 50, 50, 50, 50, 50, 50,
     10, 10, 20, 30, 30, 20, 10, 10,
@@ -38,6 +39,18 @@ PAWN_TABLE[:] = [
     5, -5,-10,  0,  0,-10, -5,  5,
     0,  0,  0,  0,  0,  0,  0,  0,
     0,  0,  0,  0,  0,  0,  0,  0
+]
+
+cdef int PAWN_TABLE_EG[64]
+PAWN_TABLE_EG[:] = [
+     0,   0,   0,   0,   0,   0,   0,   0,
+    50,  50,  50,  50,  50,  50,  50,  50,
+    30,  30,  30,  30,  30,  30,  30,  30,
+    20,  20,  20,  20,  20,  20,  20,  20,
+    10,  10,  10,  10,  10,  10,  10,  10,
+     5,   5,   5,   5,   5,   5,   5,   5,
+     0,   0,   0,   0,   0,   0,   0,   0,
+     0,   0,   0,   0,   0,   0,   0,   0
 ]
 
 cdef int KNIGHT_TABLE[64]
@@ -88,8 +101,8 @@ QUEEN_TABLE[:] = [
     -20,-10,-10, -5, -5,-10,-10,-20
 ]
 
-cdef int KING_TABLE[64]
-KING_TABLE[:] = [
+cdef int KING_TABLE_MG[64]
+KING_TABLE_MG[:] = [
     -30,-40,-40,-50,-50,-40,-40,-30,
     -30,-40,-40,-50,-50,-40,-40,-30,
     -30,-40,-40,-50,-50,-40,-40,-30,
@@ -100,17 +113,39 @@ KING_TABLE[:] = [
     20, 30, 10,  0,  0, 10, 30, 20
 ]
 
-cdef const int* PST[6]
-PST[0] = PAWN_TABLE
-PST[1] = KNIGHT_TABLE
-PST[2] = BISHOP_TABLE
-PST[3] = ROOK_TABLE
-PST[4] = QUEEN_TABLE
-PST[5] = KING_TABLE
+cdef int KING_TABLE_EG[64]
+KING_TABLE_EG[:] = [
+    -50,-30,-30,-30,-30,-30,-30,-50,
+    -30,-10,-10,-10,-10,-10,-10,-30,
+    -30,-10, 20, 30, 30, 20,-10,-30,
+    -30,-10, 30, 40, 40, 30,-10,-30,
+    -30,-10, 30, 40, 40, 30,-10,-30,
+    -30,-10, 20, 30, 30, 20,-10,-30,
+    -30,-10,-10,-10,-10,-10,-10,-30,
+    -50,-30,-30,-30,-30,-30,-30,-50
+]
+
+cdef const int* PST_MG[6]
+PST_MG[0] = PAWN_TABLE_MG
+PST_MG[1] = KNIGHT_TABLE
+PST_MG[2] = BISHOP_TABLE
+PST_MG[3] = ROOK_TABLE
+PST_MG[4] = QUEEN_TABLE
+PST_MG[5] = KING_TABLE_MG
+
+cdef const int* PST_EG[6]
+PST_EG[0] = PAWN_TABLE_EG
+PST_EG[1] = KNIGHT_TABLE
+PST_EG[2] = BISHOP_TABLE
+PST_EG[3] = ROOK_TABLE
+PST_EG[4] = QUEEN_TABLE
+PST_EG[5] = KING_TABLE_EG
 
 # Precomputed static evaluation tables
-cdef int white_piece_values[6][64]
-cdef int black_piece_values[6][64]
+cdef int white_piece_values_mg[6][64]
+cdef int black_piece_values_mg[6][64]
+cdef int white_piece_values_eg[6][64]
+cdef int black_piece_values_eg[6][64]
 
 cdef void init_piece_values() noexcept:
     cdef int p_type, sq, rank, file, w_idx, b_idx
@@ -120,14 +155,16 @@ cdef void init_piece_values() noexcept:
             file = sq % 8
             # White perspective
             w_idx = (7 - rank) * 8 + file
-            white_piece_values[p_type][sq] = PIECE_VALUES[p_type] + PST[p_type][w_idx]
+            white_piece_values_mg[p_type][sq] = PIECE_VALUES[p_type] + PST_MG[p_type][w_idx]
+            white_piece_values_eg[p_type][sq] = PIECE_VALUES[p_type] + PST_EG[p_type][w_idx]
             # Black perspective
             b_idx = rank * 8 + file
-            black_piece_values[p_type][sq] = PIECE_VALUES[p_type] + PST[p_type][b_idx]
+            black_piece_values_mg[p_type][sq] = PIECE_VALUES[p_type] + PST_MG[p_type][b_idx]
+            black_piece_values_eg[p_type][sq] = PIECE_VALUES[p_type] + PST_EG[p_type][b_idx]
 
 init_piece_values()
 
-# --- Portable LSB (BitScanForward) inline ---
+# --- Portable LSB and Popcount inline ---
 cdef extern from *:
     """
     #ifdef _MSC_VER
@@ -138,17 +175,36 @@ cdef extern from *:
         _BitScanForward64(&idx, bb);
         return (int)idx;
     }
+    #if defined(_M_AMD64) || defined(_M_ARM64)
+    static __forceinline int _cy_popcount_impl2(unsigned long long bb) {
+        return (int)__popcnt64(bb);
+    }
+    #else
+    static __forceinline int _cy_popcount_impl2(unsigned long long bb) {
+        bb = bb - ((bb >> 1) & 0x5555555555555555ULL);
+        bb = (bb & 0x3333333333333333ULL) + ((bb >> 2) & 0x3333333333333333ULL);
+        return (int)((((bb + (bb >> 4)) & 0xF0F0F0F0F0F0F0FULL) * 0x101010101010101ULL) >> 56);
+    }
+    #endif
     #else
     static __inline__ int _cy_lsb_impl2(unsigned long long bb) {
         if (!bb) return -1;
         return __builtin_ctzll(bb);
     }
+    static __inline__ int _cy_popcount_impl2(unsigned long long bb) {
+        return __builtin_popcountll(bb);
+    }
     #endif
     """
     int _cy_lsb_impl2(unsigned long long bb) nogil
+    int _cy_popcount_impl2(unsigned long long bb) nogil
 
 cdef inline int cy_lsb(unsigned long long bb) nogil:
     return _cy_lsb_impl2(bb)
+
+cdef inline int cy_popcount(unsigned long long bb) nogil:
+    return _cy_popcount_impl2(bb)
+
 
 cdef inline unsigned long long cy_clear_bit(unsigned long long bb, int sq) nogil:
     return bb & ~(<unsigned long long>1 << sq)
@@ -228,8 +284,19 @@ def clear_tt():
 
 # --- Evaluation ---
 cdef int evaluate(CustomBitboardBoard board) nogil:
-    """Static evaluation of the board from White's perspective."""
-    cdef int score = 0
+    """Static evaluation of the board with Tapered Evaluation (Middlegame vs Endgame)."""
+    # Count non-pawn material to determine phase (Knights=1, Bishops=1, Rooks=2, Queens=4)
+    cdef int knights = cy_popcount(board._bb[1]) + cy_popcount(board._bb[7])
+    cdef int bishops = cy_popcount(board._bb[2]) + cy_popcount(board._bb[8])
+    cdef int rooks = cy_popcount(board._bb[3]) + cy_popcount(board._bb[9])
+    cdef int queens = cy_popcount(board._bb[4]) + cy_popcount(board._bb[10])
+    
+    cdef int phase = knights * 1 + bishops * 1 + rooks * 2 + queens * 4
+    if phase > 24:
+        phase = 24
+
+    cdef int score_mg = 0
+    cdef int score_eg = 0
     cdef int p_idx, sq_idx
     cdef unsigned long long bb
     
@@ -239,7 +306,8 @@ cdef int evaluate(CustomBitboardBoard board) nogil:
         while bb:
             sq_idx = _cy_lsb_impl2(bb)
             bb = bb & ~(<unsigned long long>1 << sq_idx)
-            score += white_piece_values[p_idx][sq_idx]
+            score_mg += white_piece_values_mg[p_idx][sq_idx]
+            score_eg += white_piece_values_eg[p_idx][sq_idx]
 
     # Black pieces (6-11)
     for p_idx in range(6):
@@ -247,9 +315,11 @@ cdef int evaluate(CustomBitboardBoard board) nogil:
         while bb:
             sq_idx = _cy_lsb_impl2(bb)
             bb = bb & ~(<unsigned long long>1 << sq_idx)
-            score -= black_piece_values[p_idx][sq_idx]
+            score_mg -= black_piece_values_mg[p_idx][sq_idx]
+            score_eg -= black_piece_values_eg[p_idx][sq_idx]
 
-    return score
+    return <int>((score_mg * phase + score_eg * (24 - phase)) / 24)
+
 
 # --- MVV-LVA Scoring ---
 cdef int get_mvv_lva_score(CustomBitboardBoard board, int move) nogil:
@@ -646,7 +716,6 @@ cdef int negamax(
         entry.move = best_move
 
     return best_val
-
 
 # --- Main Engine API ---
 def get_best_move_cy(

@@ -41,7 +41,7 @@ PIECE_VALUES = [100, 320, 330, 500, 900, 0]
 INFINITE = 10000000
 MATE_THRESHOLD = 90000
 
-PAWN_TABLE = (
+PAWN_TABLE_MG = (
     0,  0,  0,  0,  0,  0,  0,  0,
     50, 50, 50, 50, 50, 50, 50, 50,
     10, 10, 20, 30, 30, 20, 10, 10,
@@ -50,6 +50,17 @@ PAWN_TABLE = (
     5, -5,-10,  0,  0,-10, -5,  5,
     0,  0,  0,  0,  0,  0,  0,  0,
     0,  0,  0,  0,  0,  0,  0,  0
+)
+
+PAWN_TABLE_EG = (
+     0,   0,   0,   0,   0,   0,   0,   0,
+    50,  50,  50,  50,  50,  50,  50,  50,
+    30,  30,  30,  30,  30,  30,  30,  30,
+    20,  20,  20,  20,  20,  20,  20,  20,
+    10,  10,  10,  10,  10,  10,  10,  10,
+     5,   5,   5,   5,   5,   5,   5,   5,
+     0,   0,   0,   0,   0,   0,   0,   0,
+     0,   0,   0,   0,   0,   0,   0,   0
 )
 
 KNIGHT_TABLE = (
@@ -96,7 +107,7 @@ QUEEN_TABLE = (
     -20,-10,-10, -5, -5,-10,-10,-20
 )
 
-KING_TABLE = (
+KING_TABLE_MG = (
     -30,-40,-40,-50,-50,-40,-40,-30,
     -30,-40,-40,-50,-50,-40,-40,-30,
     -30,-40,-40,-50,-50,-40,-40,-30,
@@ -107,36 +118,66 @@ KING_TABLE = (
     20, 30, 10,  0,  0, 10, 30, 20
 )
 
-PST = {
-    0: PAWN_TABLE,
+KING_TABLE_EG = (
+    -50,-30,-30,-30,-30,-30,-30,-50,
+    -30,-10,-10,-10,-10,-10,-10,-30,
+    -30,-10, 20, 30, 30, 20,-10,-30,
+    -30,-10, 30, 40, 40, 30,-10,-30,
+    -30,-10, 30, 40, 40, 30,-10,-30,
+    -30,-10, 20, 30, 30, 20,-10,-30,
+    -30,-10,-10,-10,-10,-10,-10,-30,
+    -50,-30,-30,-30,-30,-30,-30,-50
+)
+
+PST_MG = {
+    0: PAWN_TABLE_MG,
     1: KNIGHT_TABLE,
     2: BISHOP_TABLE,
     3: ROOK_TABLE,
     4: QUEEN_TABLE,
-    5: KING_TABLE
+    5: KING_TABLE_MG
+}
+
+PST_EG = {
+    0: PAWN_TABLE_EG,
+    1: KNIGHT_TABLE,
+    2: BISHOP_TABLE,
+    3: ROOK_TABLE,
+    4: QUEEN_TABLE,
+    5: KING_TABLE_EG
 }
 
 # Precompute material and PST values for fast evaluation
-white_piece_values = {}
-black_piece_values = {}
+white_piece_values_mg = {}
+black_piece_values_mg = {}
+white_piece_values_eg = {}
+black_piece_values_eg = {}
 
 for p_type in range(6):
-    white_piece_values[p_type] = [0] * 64
-    black_piece_values[p_type] = [0] * 64
+    white_piece_values_mg[p_type] = [0] * 64
+    black_piece_values_mg[p_type] = [0] * 64
+    white_piece_values_eg[p_type] = [0] * 64
+    black_piece_values_eg[p_type] = [0] * 64
     for sq in range(64):
         rank = sq // 8
         file = sq % 8
 
         # White perspective (A8 is top-left, index 0 in PST)
         w_idx = (7 - rank) * 8 + file
-        white_piece_values[p_type][sq] = (
-            PIECE_VALUES[p_type] + PST[p_type][w_idx]
+        white_piece_values_mg[p_type][sq] = (
+            PIECE_VALUES[p_type] + PST_MG[p_type][w_idx]
+        )
+        white_piece_values_eg[p_type][sq] = (
+            PIECE_VALUES[p_type] + PST_EG[p_type][w_idx]
         )
 
         # Black perspective (A1 is bottom-left, index 56 in PST)
         b_idx = rank * 8 + file
-        black_piece_values[p_type][sq] = (
-            PIECE_VALUES[p_type] + PST[p_type][b_idx]
+        black_piece_values_mg[p_type][sq] = (
+            PIECE_VALUES[p_type] + PST_MG[p_type][b_idx]
+        )
+        black_piece_values_eg[p_type][sq] = (
+            PIECE_VALUES[p_type] + PST_EG[p_type][b_idx]
         )
 
 # Remove temporary module-level variables to avoid redefining outer scope warnings
@@ -177,15 +218,28 @@ init_lmr_reductions()
 
 # --- Evaluation Function ---
 def evaluate(board: CustomBitboardBoard) -> int:
-    """Static evaluation of the board from White's perspective."""
-    score = 0
+    """Static evaluation of the board with Tapered Evaluation (Middlegame vs Endgame)."""
+    # Count non-pawn material to determine phase (Knights=1, Bishops=1, Rooks=2, Queens=4)
+    knights = board.bitboards[1].bit_count() + board.bitboards[7].bit_count()
+    bishops = board.bitboards[2].bit_count() + board.bitboards[8].bit_count()
+    rooks = board.bitboards[3].bit_count() + board.bitboards[9].bit_count()
+    queens = board.bitboards[4].bit_count() + board.bitboards[10].bit_count()
+    
+    phase = knights * 1 + bishops * 1 + rooks * 2 + queens * 4
+    if phase > 24:
+        phase = 24
+
+    score_mg = 0
+    score_eg = 0
+
     # White pieces (0-5)
     for p_idx in range(6):
         bb = board.bitboards[p_idx]
         while bb:
             sq_idx = lsb(bb)
             bb = clear_bit(bb, sq_idx)
-            score += white_piece_values[p_idx][sq_idx]
+            score_mg += white_piece_values_mg[p_idx][sq_idx]
+            score_eg += white_piece_values_eg[p_idx][sq_idx]
 
     # Black pieces (6-11)
     for p_idx in range(6):
@@ -193,9 +247,11 @@ def evaluate(board: CustomBitboardBoard) -> int:
         while bb:
             sq_idx = lsb(bb)
             bb = clear_bit(bb, sq_idx)
-            score -= black_piece_values[p_idx][sq_idx]
+            score_mg -= black_piece_values_mg[p_idx][sq_idx]
+            score_eg -= black_piece_values_eg[p_idx][sq_idx]
 
-    return score
+    # Interpolate between Middlegame and Endgame and return as C-like rounded integer
+    return int((score_mg * phase + score_eg * (24 - phase)) / 24)
 
 
 # --- Move Ordering / Scoring ---
