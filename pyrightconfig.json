@@ -1,0 +1,12 @@
+{
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/*.pyx",
+    "**/*.pxd"
+  ],
+  "ignore": [
+    "**/*.pyx",
+    "**/*.pxd"
+  ]
+}

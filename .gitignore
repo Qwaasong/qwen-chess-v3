@@ -1,0 +1,19 @@
+# Build artifacts
+build/
+dist/
+*.pyd
+*.so
+*.dll
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Cython generated files
+*.c
+*.html
+
+# IDE
+.vscode/
+.idea/
