@@ -169,6 +169,8 @@ cdef struct SearchInfo:
     double time_limit
     bint stop
     int current_depth
+    unsigned long long root_key
+    int root_best_move
 
 cdef SearchInfo info
 
@@ -397,7 +399,7 @@ cdef int negamax(
     cdef unsigned long long key = board.zobrist_key
     cdef unsigned int idx = key & (TT_SIZE - 1)
     cdef TTEntry *entry = &_tt[idx]
-    cdef int val, tt_move = -1, tt_val
+    cdef int val, tt_move = -1, tt_val, q_flag
 
     if entry.key == key:
         if entry.depth >= depth:
@@ -469,10 +471,16 @@ cdef int negamax(
         elif tt_val < -MATE_THRESHOLD:
             tt_val -= ply
         
+        q_flag = 0
+        if val <= alpha:
+            q_flag = 2
+        elif val >= beta:
+            q_flag = 1
+
         entry.key = key
         entry.depth = 0
         entry.val = tt_val
-        entry.flag = 0
+        entry.flag = q_flag
         entry.move = -1
         return val
 
@@ -536,43 +544,51 @@ cdef int negamax(
         
         legal_moves_searched += 1
 
-        # --- Late Move Reductions (LMR) ---
-        if (depth >= 2 and 
-            legal_moves_searched > 1 and 
-            not is_cap and 
-            flag < 8 and 
-            not in_check):
-            
-            # Lookup reduction from precomputed table
-            r_val = LMR_REDUCTIONS[depth][legal_moves_searched] if legal_moves_searched < 64 else LMR_REDUCTIONS[depth][63]
-            r_int = r_val // 1024
-
-            # Reductions tuning
-            if pv_node:
-                r_int -= 1
-            if move == killer_moves[0][ply] or move == killer_moves[1][ply]:
-                r_int -= 1
-            
-            p_type = board.piece_map[to_sq] # the piece is already moved to to_sq
-            if p_type != -1:
-                if history_moves[p_type][to_sq] > 2000:
-                    r_int -= 1
-                elif history_moves[p_type][to_sq] < 500:
-                    r_int += 1
-
-            if r_int < 1:
-                r_int = 1
-            if r_int >= depth:
-                r_int = depth - 1
-
-            # Search at reduced depth with null window
-            val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1)
-            
-            # Re-search if reduced search failed high
-            if val > alpha and r_int > 0:
-                val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1)
-        else:
+        if legal_moves_searched == 1:
             val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1)
+        else:
+            # --- Late Move Reductions (LMR) ---
+            if (depth >= 2 and 
+                legal_moves_searched > 4 and 
+                not is_cap and 
+                flag < 8 and 
+                not in_check):
+                
+                # Lookup reduction from precomputed table
+                r_val = LMR_REDUCTIONS[depth][legal_moves_searched] if legal_moves_searched < 64 else LMR_REDUCTIONS[depth][63]
+                r_int = r_val // 1024
+
+                # Reductions tuning
+                if pv_node:
+                    r_int -= 1
+                if move == killer_moves[0][ply] or move == killer_moves[1][ply]:
+                    r_int -= 1
+                
+                p_type = board.piece_map[to_sq] # the piece is already moved to to_sq
+                if p_type != -1:
+                    if history_moves[p_type][to_sq] > 2000:
+                        r_int -= 1
+                    elif history_moves[p_type][to_sq] < 500:
+                        r_int += 1
+
+                if r_int < 1:
+                    r_int = 1
+                if r_int >= depth:
+                    r_int = depth - 1
+
+                # Search at reduced depth with null window
+                val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1)
+                
+                # Re-search at full depth with null window if reduced search failed high
+                if val > alpha and r_int > 0:
+                    val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1)
+            else:
+                # Search at full depth with null window
+                val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1)
+            
+            # Re-search with full window if null window search failed high
+            if val > alpha and val < beta:
+                val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1)
         
         board.unmake_move_c()
 
@@ -582,6 +598,8 @@ cdef int negamax(
         if val > best_val:
             best_val = val
             best_move = move
+            if ply == 0:
+                info.root_best_move = move
 
         if val > alpha:
             alpha = val
@@ -620,11 +638,12 @@ cdef int negamax(
     elif tt_val < -MATE_THRESHOLD:
         tt_val -= ply
 
-    entry.key = key
-    entry.depth = depth
-    entry.val = tt_val
-    entry.flag = tt_flag
-    entry.move = best_move
+    if key == info.root_key or entry.key != info.root_key:
+        entry.key = key
+        entry.depth = depth
+        entry.val = tt_val
+        entry.flag = tt_flag
+        entry.move = best_move
 
     return best_val
 
@@ -654,6 +673,9 @@ def get_best_move_cy(
     if legal_moves.count == 0:
         return None
 
+    info.root_key = board.zobrist_key
+    info.root_best_move = legal_moves.moves[0]
+
     cdef int best_move_so_far = legal_moves.moves[0]
     cdef int color = 1 if board.side_to_move == WHITE else -1
 
@@ -662,22 +684,58 @@ def get_best_move_cy(
     cdef unsigned int idx
     cdef TTEntry *entry
     cdef int score
+    cdef int delta = 15
+    cdef int last_score = 0
+    cdef int alpha_aw, beta_aw
 
     while not info.stop:
         if depth_limit > 0 and depth > depth_limit:
             break
 
         info.current_depth = depth
-        negamax(board, depth, -INFINITE, INFINITE, color, 0)
+        if depth < 5:
+            negamax(board, depth, -INFINITE, INFINITE, color, 0)
+            key = board.zobrist_key
+            idx = key & (TT_SIZE - 1)
+            entry = &_tt[idx]
+            if entry.key == key:
+                last_score = entry.val
+        else:
+            delta = 15
+            alpha_aw = last_score - delta
+            beta_aw = last_score + delta
+            while not info.stop:
+                if alpha_aw < -INFINITE: alpha_aw = -INFINITE
+                if beta_aw > INFINITE: beta_aw = INFINITE
+                
+                score = negamax(board, depth, alpha_aw, beta_aw, color, 0)
+                
+                if info.stop:
+                    break
+                
+                key = board.zobrist_key
+                idx = key & (TT_SIZE - 1)
+                entry = &_tt[idx]
+                if entry.key == key:
+                    last_score = entry.val
+                else:
+                    last_score = score
+                
+                if last_score <= alpha_aw:
+                    beta_aw = alpha_aw
+                    delta += delta // 3 + 5
+                    alpha_aw = last_score - delta
+                elif last_score >= beta_aw:
+                    alpha_aw = beta_aw
+                    delta += delta // 3 + 5
+                    beta_aw = last_score + delta
+                else:
+                    break
 
         if info.stop:
             break
 
-        key = board.zobrist_key
-        idx = key & (TT_SIZE - 1)
-        entry = &_tt[idx]
-        if entry.key == key and entry.move != -1:
-            best_move_so_far = entry.move
+        best_move_so_far = info.root_best_move
 
         if print_info:
             score = 0
