@@ -1,0 +1,15 @@
+{
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "files.associations": {
+        "*.pyx": "cython",
+        "*.pxd": "cython"
+    },
+    "python.analysis.exclude": [
+        "**/*.pyx",
+        "**/*.pxd"
+    ],
+    "python.analysis.ignore": [
+        "**/*.pyx",
+        "**/*.pxd"
+    ]
+}
