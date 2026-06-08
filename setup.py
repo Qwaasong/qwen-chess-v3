@@ -37,5 +37,6 @@ setup(
             "cdivision": True,
             "nonecheck": False,
         },
+        annotate=True,
     ),
 )

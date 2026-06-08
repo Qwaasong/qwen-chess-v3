@@ -6,6 +6,24 @@
 # cython: nonecheck=False
 """Search Engine and Evaluator for qwen-chess-v3 in Cython."""
 
+cdef extern from *:
+    """
+    #ifdef _WIN32
+    #include <windows.h>
+    static double get_time_ms() {
+        return (double)GetTickCount();
+    }
+    #else
+    #include <sys/time.h>
+    static double get_time_ms() {
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        return (double)tv.tv_sec * 1000.0 + (double)tv.tv_usec / 1000.0;
+    }
+    #endif
+    """
+    double get_time_ms() noexcept nogil
+
 import time
 import random
 import chess
@@ -172,6 +190,42 @@ cdef void init_piece_values() noexcept:
 
 init_piece_values()
 
+cdef inline void add_piece_eval(int piece, int sq, int *score_mg, int *score_eg, int *phase) noexcept nogil:
+    if piece < 6:
+        score_mg[0] += white_piece_values_mg[piece][sq]
+        score_eg[0] += white_piece_values_eg[piece][sq]
+    else:
+        score_mg[0] -= black_piece_values_mg[piece - 6][sq]
+        score_eg[0] -= black_piece_values_eg[piece - 6][sq]
+    
+    cdef int p_type = piece % 6
+    if p_type == 1:   # Knight
+        phase[0] += 1
+    elif p_type == 2: # Bishop
+        phase[0] += 1
+    elif p_type == 3: # Rook
+        phase[0] += 2
+    elif p_type == 4: # Queen
+        phase[0] += 4
+
+cdef inline void remove_piece_eval(int piece, int sq, int *score_mg, int *score_eg, int *phase) noexcept nogil:
+    if piece < 6:
+        score_mg[0] -= white_piece_values_mg[piece][sq]
+        score_eg[0] -= white_piece_values_eg[piece][sq]
+    else:
+        score_mg[0] += black_piece_values_mg[piece - 6][sq]
+        score_eg[0] += black_piece_values_eg[piece - 6][sq]
+    
+    cdef int p_type = piece % 6
+    if p_type == 1:   # Knight
+        phase[0] -= 1
+    elif p_type == 2: # Bishop
+        phase[0] -= 1
+    elif p_type == 3: # Rook
+        phase[0] -= 2
+    elif p_type == 4: # Queen
+        phase[0] -= 4
+
 # --- Portable LSB and Popcount inline ---
 cdef extern from *:
     """
@@ -235,6 +289,7 @@ cdef struct SearchInfo:
     int current_depth
     unsigned long long root_key
     int root_best_move
+    int root_ponder_move
 
 cdef SearchInfo info
 
@@ -266,6 +321,94 @@ cdef void init_lmr_reductions() noexcept:
                 LMR_REDUCTIONS[depth][move_count] = 0
             else:
                 LMR_REDUCTIONS[depth][move_count] = <int>(0.5 + log(depth) * log(move_count) / 1.95 * 1024)
+
+cdef bint has_sufficient_material_bb(unsigned long long *bitboards) noexcept nogil:
+    # Pawns
+    if bitboards[0] != 0 or bitboards[6] != 0:
+        return True
+    # Rooks
+    if bitboards[3] != 0 or bitboards[9] != 0:
+        return True
+    # Queens
+    if bitboards[4] != 0 or bitboards[10] != 0:
+        return True
+        
+    cdef int w_knights = cy_popcount(bitboards[1])
+    cdef int b_knights = cy_popcount(bitboards[7])
+    cdef int w_bishops = cy_popcount(bitboards[2])
+    cdef int b_bishops = cy_popcount(bitboards[8])
+    
+    cdef int total_pieces = w_knights + b_knights + w_bishops + b_bishops
+    
+    if total_pieces == 0:
+        return False
+        
+    if total_pieces == 1:
+        return False
+        
+    if w_bishops == 1 and b_bishops == 1 and w_knights == 0 and b_knights == 0:
+        if ( (cy_lsb(bitboards[2]) // 8 + cy_lsb(bitboards[2]) % 8) % 2 ) == ( (cy_lsb(bitboards[8]) // 8 + cy_lsb(bitboards[8]) % 8) % 2 ):
+            return False
+            
+    return True
+
+cdef bint is_repetition(unsigned long long *search_history, int root_history_len, int ply, unsigned long long key, int halfmove_clock) noexcept nogil:
+    cdef int current_len = root_history_len + ply
+    cdef int limit = current_len - halfmove_clock
+    if limit < 0:
+        limit = 0
+    cdef int i = current_len - 2
+    while i >= limit:
+        if search_history[i] == key:
+            return True
+        i -= 2
+    return False
+
+cdef list extract_pv(CGameState root_state, int depth, CustomBitboardBoard shell):
+    cdef list pv_moves = []
+    cdef CGameState state = root_state
+    cdef CGameState child_state
+    cdef CMoveList pseudo
+    cdef int i, move, idx
+    cdef TTEntry *entry
+    cdef list visited_keys = []
+    cdef bint found = False
+    
+    for d in range(depth):
+        key = state.zobrist_key
+        if key in visited_keys:
+            break
+        visited_keys.append(key)
+        
+        idx = key & (TT_SIZE - 1)
+        entry = &_tt[idx]
+        if entry.key != key or entry.move == -1:
+            break
+            
+        move = entry.move
+        
+        pseudo.count = 0
+        load_state_to_shell(&state, shell)
+        shell._generate_pseudo_legal_moves_c(&pseudo)
+        
+        found = False
+        for i in range(pseudo.count):
+            if pseudo.moves[i] == move:
+                found = True
+                break
+                
+        if not found:
+            break
+            
+        child_state = state
+        make_move_on_state(&child_state, move)
+        if not is_state_legal(&child_state, shell, state.side_to_move):
+            break
+            
+        pv_moves.append(move)
+        state = child_state
+        
+    return pv_moves
 
 # Scored Moves Structures and Sorting
 cdef struct CScoredMove:
@@ -343,7 +486,7 @@ cdef inline void init_move_picker(
     mp.capture_idx = 0
     mp.quiet_idx = 0
 
-cdef inline void generate_and_score_captures(MovePicker *mp, CustomBitboardBoard board) noexcept:
+cdef inline void generate_and_score_captures(MovePicker *mp, CustomBitboardBoard board) noexcept nogil:
     cdef CMoveList raw_moves
     raw_moves.count = 0
     board._generate_captures_c(&raw_moves)
@@ -358,7 +501,7 @@ cdef inline void generate_and_score_captures(MovePicker *mp, CustomBitboardBoard
     sort_moves(&mp.captures)
     mp.captures_generated = True
 
-cdef inline void generate_and_score_quiets(MovePicker *mp, CustomBitboardBoard board, int ply) noexcept:
+cdef inline void generate_and_score_quiets(MovePicker *mp, CustomBitboardBoard board, int ply) noexcept nogil:
     cdef CMoveList raw_moves
     raw_moves.count = 0
     board._generate_quiets_c(&raw_moves)
@@ -378,7 +521,7 @@ cdef inline void generate_and_score_quiets(MovePicker *mp, CustomBitboardBoard b
     sort_moves(&mp.quiets)
     mp.quiets_generated = True
 
-cdef int next_move(MovePicker *mp, CustomBitboardBoard board, int ply) except *:
+cdef int next_move(MovePicker *mp, CustomBitboardBoard board, int ply) noexcept nogil:
     cdef int move = -1
     cdef int i
     cdef bint found = False
@@ -474,7 +617,7 @@ cdef inline void init_qmove_picker(
     qmp.qdepth = qdepth
     qmp.moves.count = 0
 
-cdef int next_qmove(QMovePicker *qmp, CustomBitboardBoard board) except *:
+cdef int next_qmove(QMovePicker *qmp, CustomBitboardBoard board) noexcept nogil:
     cdef int move = -1
     cdef CMoveList raw_moves
     cdef int i, score, to_sq, flag, is_cap
@@ -529,7 +672,7 @@ cdef int next_qmove(QMovePicker *qmp, CustomBitboardBoard board) except *:
                         if not board.make_move_c(move):
                             board.unmake_move_c()
                             continue
-                        gives_check = board.in_check()
+                        gives_check = board.in_check_c()
                         board.unmake_move_c()
                         if gives_check:
                             qmp.moves.moves[qmp.moves.count].move = move
@@ -564,6 +707,9 @@ cdef void load_state_to_shell(CGameState *state, CustomBitboardBoard shell) noex
     shell.halfmove_clock  = state.halfmove_clock
     shell.fullmove_number = state.fullmove_number
     shell.zobrist_key     = state.zobrist_key
+    shell.score_mg        = state.score_mg
+    shell.score_eg        = state.score_eg
+    shell.phase           = state.phase
     shell._history_len    = 0
 
 cdef void make_null_move_on_state(CGameState *state) noexcept nogil:
@@ -583,7 +729,7 @@ cdef void make_null_move_on_state(CGameState *state) noexcept nogil:
         state.fullmove_number += 1
 
 cdef int negamax_copymake(
-    CGameState state,
+    CGameState *state,
     int depth,
     int alpha,
     int beta,
@@ -592,14 +738,24 @@ cdef int negamax_copymake(
     int extensions,
     int prev_move,
     CustomBitboardBoard shell,
-) except *:
+    unsigned long long *search_history,
+    int root_history_len,
+) noexcept nogil:
     info.nodes += 1
 
     if info.nodes % 4096 == 0:
-        with nogil:
-            pass
-        if time.time() - info.start_time > info.time_limit:
+        if get_time_ms() - info.start_time > info.time_limit:
             info.stop = True
+            return 0
+
+    search_history[root_history_len + ply] = state.zobrist_key
+
+    if ply > 0:
+        if state.halfmove_clock >= 100:
+            return 0
+        if not has_sufficient_material_bb(state.bitboards):
+            return 0
+        if is_repetition(search_history, root_history_len, ply, state.zobrist_key, state.halfmove_clock):
             return 0
 
     cdef int alpha_orig = alpha
@@ -624,8 +780,8 @@ cdef int negamax_copymake(
     cdef int p_type
 
     # Check check status
-    load_state_to_shell(&state, shell)
-    in_check = shell.in_check()
+    load_state_to_shell(state, shell)
+    in_check = shell.in_check_c()
 
     # Check Extensions
     if in_check and extensions < 8:
@@ -678,9 +834,9 @@ cdef int negamax_copymake(
 
         if has_non_pawn:
             R = 3 + depth // 4
-            null_state = state
+            null_state = state[0]
             make_null_move_on_state(&null_state)
-            val = -negamax_copymake(null_state, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended, -1, shell)
+            val = -negamax_copymake(&null_state, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended, -1, shell, search_history, root_history_len)
             
             if info.stop:
                 return 0
@@ -688,7 +844,7 @@ cdef int negamax_copymake(
             if val >= beta:
                 # Verification search for deep cuts (anti-zugzwang verification)
                 if depth >= 6:
-                    val = negamax_copymake(state, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended, prev_move, shell)
+                    val = negamax_copymake(state, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended, prev_move, shell, search_history, root_history_len)
                     if val >= beta:
                         return val
                 else:
@@ -696,7 +852,7 @@ cdef int negamax_copymake(
 
     if depth <= 0:
         # Load state into shell board and run quiescence search (fallback to Make/Unmake)
-        load_state_to_shell(&state, shell)
+        load_state_to_shell(state, shell)
         val = quiescence(shell, alpha, beta, color, ply, 0)
         tt_val = val
         if tt_val > MATE_THRESHOLD:
@@ -729,7 +885,7 @@ cdef int negamax_copymake(
 
     while True:
         # Load current parent state to shell so next_move generates/queries moves correctly
-        load_state_to_shell(&state, shell)
+        load_state_to_shell(state, shell)
         move = next_move(&mp, shell, ply)
         if move == -1:
             break
@@ -739,7 +895,7 @@ cdef int negamax_copymake(
         flag = (move >> 12) & 0x0F
         is_cap = flag == 3 or (state.piece_map[to_sq] != -1)
 
-        child_state = state
+        child_state = state[0]
         make_move_on_state(&child_state, move)
         if not is_state_legal(&child_state, shell, state.side_to_move):
             continue
@@ -747,7 +903,7 @@ cdef int negamax_copymake(
         legal_moves_searched += 1
 
         if legal_moves_searched == 1:
-            val = -negamax_copymake(child_state, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move, shell)
+            val = -negamax_copymake(&child_state, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move, shell, search_history, root_history_len)
         else:
             # --- Late Move Reductions (LMR) ---
             if (depth >= 2 and 
@@ -779,18 +935,18 @@ cdef int negamax_copymake(
                     r_int = depth - 1
 
                 # Search at reduced depth with null window
-                val = -negamax_copymake(child_state, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move, shell)
+                val = -negamax_copymake(&child_state, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move, shell, search_history, root_history_len)
                 
                 # Re-search at full depth with null window if reduced search failed high
                 if val > alpha and r_int > 0:
-                    val = -negamax_copymake(child_state, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move, shell)
+                    val = -negamax_copymake(&child_state, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move, shell, search_history, root_history_len)
             else:
                 # Search at full depth with null window
-                val = -negamax_copymake(child_state, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move, shell)
+                val = -negamax_copymake(&child_state, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move, shell, search_history, root_history_len)
             
             # Re-search with full window if null window search failed high
             if val > alpha and val < beta:
-                val = -negamax_copymake(child_state, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move, shell)
+                val = -negamax_copymake(&child_state, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move, shell, search_history, root_history_len)
 
         if info.stop:
             return 0
@@ -855,39 +1011,10 @@ cdef int negamax_copymake(
 
     return best_val
 cdef int evaluate_state(CGameState *state) noexcept nogil:
-    cdef int knights = cy_popcount(state.bitboards[1]) + cy_popcount(state.bitboards[7])
-    cdef int bishops = cy_popcount(state.bitboards[2]) + cy_popcount(state.bitboards[8])
-    cdef int rooks = cy_popcount(state.bitboards[3]) + cy_popcount(state.bitboards[9])
-    cdef int queens = cy_popcount(state.bitboards[4]) + cy_popcount(state.bitboards[10])
-    
-    cdef int phase = knights * 1 + bishops * 1 + rooks * 2 + queens * 4
+    cdef int phase = state.phase
     if phase > 24:
         phase = 24
-
-    cdef int score_mg = 0
-    cdef int score_eg = 0
-    cdef int p_idx, sq_idx
-    cdef unsigned long long bb
-    
-    # White pieces (0-5)
-    for p_idx in range(6):
-        bb = state.bitboards[p_idx]
-        while bb:
-            sq_idx = _cy_lsb_impl2(bb)
-            bb = bb & ~(<unsigned long long>1 << sq_idx)
-            score_mg += white_piece_values_mg[p_idx][sq_idx]
-            score_eg += white_piece_values_eg[p_idx][sq_idx]
-
-    # Black pieces (6-11)
-    for p_idx in range(6):
-        bb = state.bitboards[p_idx + 6]
-        while bb:
-            sq_idx = _cy_lsb_impl2(bb)
-            bb = bb & ~(<unsigned long long>1 << sq_idx)
-            score_mg -= black_piece_values_mg[p_idx][sq_idx]
-            score_eg -= black_piece_values_eg[p_idx][sq_idx]
-
-    return <int>((score_mg * phase + score_eg * (24 - phase)) / 24)
+    return <int>((state.score_mg * phase + state.score_eg * (24 - phase)) / 24)
 
 cdef void make_move_on_state(CGameState *state, int move) noexcept nogil:
     cdef int from_sq = move & 0x3F
@@ -899,6 +1026,9 @@ cdef void make_move_on_state(CGameState *state, int move) noexcept nogil:
     cdef int mp = state.piece_map[from_sq]
     if mp == -1:
         return
+
+    # Update evaluation: remove moving piece from source square
+    remove_piece_eval(mp, from_sq, &state.score_mg, &state.score_eg, &state.phase)
 
     # XOR out the moving piece from the source square
     state.zobrist_key ^= ZOBRIST_PIECES[mp][from_sq]
@@ -916,6 +1046,9 @@ cdef void make_move_on_state(CGameState *state, int move) noexcept nogil:
         state.fullmove_number += 1
 
     if cap != -1:
+        # Update evaluation: remove captured piece from destination square
+        remove_piece_eval(cap, to_sq, &state.score_mg, &state.score_eg, &state.phase)
+
         state.zobrist_key ^= ZOBRIST_PIECES[cap][to_sq]
         state.bitboards[cap] = state.bitboards[cap] & ~(<unsigned long long>1 << to_sq)
         state.piece_map[to_sq] = -1
@@ -929,27 +1062,46 @@ cdef void make_move_on_state(CGameState *state, int move) noexcept nogil:
     elif flag == 3:  # FLAG_EP = 3
         cap_ep_sq   = to_sq - 8 if side == WHITE else to_sq + 8
         ep_pawn_idx = 6 if side == WHITE else 0 # P_p=6, P_P=0
+        # Update evaluation: remove captured EP pawn
+        remove_piece_eval(ep_pawn_idx, cap_ep_sq, &state.score_mg, &state.score_eg, &state.phase)
+
         state.zobrist_key ^= ZOBRIST_PIECES[ep_pawn_idx][cap_ep_sq]
         state.bitboards[ep_pawn_idx] = state.bitboards[ep_pawn_idx] & ~(<unsigned long long>1 << cap_ep_sq)
         state.piece_map[cap_ep_sq] = -1
         state.halfmove_clock = 0
     elif flag == 2:  # FLAG_CASTLE = 2
         if to_sq == 6: # G1 = 6
+            # Update evaluation: White castle rook from H1 to F1
+            remove_piece_eval(3, 7, &state.score_mg, &state.score_eg, &state.phase)
+            add_piece_eval(3, 5, &state.score_mg, &state.score_eg, &state.phase)
+
             state.zobrist_key ^= ZOBRIST_PIECES[3][7] ^ ZOBRIST_PIECES[3][5] # P_R=3, H1=7, F1=5
             state.bitboards[3] = state.bitboards[3] & ~(<unsigned long long>1 << 7)
             state.bitboards[3] = state.bitboards[3] | (<unsigned long long>1 << 5)
             state.piece_map[7] = -1; state.piece_map[5] = 3
         elif to_sq == 2: # C1 = 2
+            # Update evaluation: White castle rook from A1 to D1
+            remove_piece_eval(3, 0, &state.score_mg, &state.score_eg, &state.phase)
+            add_piece_eval(3, 3, &state.score_mg, &state.score_eg, &state.phase)
+
             state.zobrist_key ^= ZOBRIST_PIECES[3][0] ^ ZOBRIST_PIECES[3][3] # P_R=3, A1=0, D1=3
             state.bitboards[3] = state.bitboards[3] & ~(<unsigned long long>1 << 0)
             state.bitboards[3] = state.bitboards[3] | (<unsigned long long>1 << 3)
             state.piece_map[0] = -1; state.piece_map[3] = 3
         elif to_sq == 62: # G8 = 62
+            # Update evaluation: Black castle rook from H8 to F8
+            remove_piece_eval(9, 63, &state.score_mg, &state.score_eg, &state.phase)
+            add_piece_eval(9, 61, &state.score_mg, &state.score_eg, &state.phase)
+
             state.zobrist_key ^= ZOBRIST_PIECES[9][63] ^ ZOBRIST_PIECES[9][61] # P_r=9, H8=63, F8=61
             state.bitboards[9] = state.bitboards[9] & ~(<unsigned long long>1 << 63)
             state.bitboards[9] = state.bitboards[9] | (<unsigned long long>1 << 61)
             state.piece_map[63] = -1; state.piece_map[61] = 9
         elif to_sq == 58: # C8 = 58
+            # Update evaluation: Black castle rook from A8 to D8
+            remove_piece_eval(9, 56, &state.score_mg, &state.score_eg, &state.phase)
+            add_piece_eval(9, 59, &state.score_mg, &state.score_eg, &state.phase)
+
             state.zobrist_key ^= ZOBRIST_PIECES[9][56] ^ ZOBRIST_PIECES[9][59] # P_r=9, A8=56, D8=59
             state.bitboards[9] = state.bitboards[9] & ~(<unsigned long long>1 << 56)
             state.bitboards[9] = state.bitboards[9] | (<unsigned long long>1 << 59)
@@ -962,11 +1114,18 @@ cdef void make_move_on_state(CGameState *state, int move) noexcept nogil:
         elif flag == 10: p_prom = 3 + prom_offset # P_R = 3
         elif flag == 9:  p_prom = 2 + prom_offset # P_B = 2
         else:            p_prom = 1 + prom_offset # P_N = 1
+
+        # Update evaluation: add promoted piece to destination square
+        add_piece_eval(p_prom, to_sq, &state.score_mg, &state.score_eg, &state.phase)
+
         state.zobrist_key ^= ZOBRIST_PIECES[p_prom][to_sq]
         state.bitboards[p_prom] = state.bitboards[p_prom] | (<unsigned long long>1 << to_sq)
         state.piece_map[to_sq] = p_prom
         state.halfmove_clock = 0
     else:
+        # Update evaluation: add moving piece to destination square
+        add_piece_eval(mp, to_sq, &state.score_mg, &state.score_eg, &state.phase)
+
         state.zobrist_key ^= ZOBRIST_PIECES[mp][to_sq]
         state.bitboards[mp] = state.bitboards[mp] | (<unsigned long long>1 << to_sq)
         state.piece_map[to_sq] = mp
@@ -1021,23 +1180,19 @@ cdef void make_move_on_state(CGameState *state, int move) noexcept nogil:
         state.zobrist_key ^= ZOBRIST_EP[state.en_passant_sq % 8]
     state.zobrist_key ^= ZOBRIST_SIDE
 
-cdef bint is_state_legal(CGameState *state, CustomBitboardBoard shell, int side_that_moved) noexcept:
+cdef bint is_state_legal(CGameState *state, CustomBitboardBoard shell, int side_that_moved) noexcept nogil:
     cdef int king_piece_idx = 5 if side_that_moved == WHITE else 11
     cdef unsigned long long king_bb = state.bitboards[king_piece_idx]
     cdef int king_sq = cy_lsb(king_bb)
     if king_sq == -1:
         return True
     
-    # Load state into shell board to check attacks
+    # Load ONLY necessary parts of state into shell board to check attacks (is_square_attacked_c only needs _bb and _occ[2])
     memcpy(shell._bb,       state.bitboards,    12 * sizeof(unsigned long long))
-    memcpy(shell._occ,      state.occupancies,   3 * sizeof(unsigned long long))
-    memcpy(shell.piece_map, state.piece_map,    64 * sizeof(int))
-    shell.side_to_move    = state.side_to_move
-    shell.castling_rights = state.castling_rights
-    shell.en_passant_sq   = state.en_passant_sq
+    shell._occ[2] = state.occupancies[2]
     
     cdef int opponent = BLACK if side_that_moved == WHITE else WHITE
-    return not shell.is_square_attacked(king_sq, opponent)
+    return not shell.is_square_attacked_c(king_sq, opponent)
 
 def clear_tt():
     """Clears the Transposition Table memory."""
@@ -1046,40 +1201,10 @@ def clear_tt():
 # --- Evaluation ---
 cdef int evaluate(CustomBitboardBoard board) nogil:
     """Static evaluation of the board with Tapered Evaluation (Middlegame vs Endgame)."""
-    # Count non-pawn material to determine phase (Knights=1, Bishops=1, Rooks=2, Queens=4)
-    cdef int knights = cy_popcount(board._bb[1]) + cy_popcount(board._bb[7])
-    cdef int bishops = cy_popcount(board._bb[2]) + cy_popcount(board._bb[8])
-    cdef int rooks = cy_popcount(board._bb[3]) + cy_popcount(board._bb[9])
-    cdef int queens = cy_popcount(board._bb[4]) + cy_popcount(board._bb[10])
-    
-    cdef int phase = knights * 1 + bishops * 1 + rooks * 2 + queens * 4
+    cdef int phase = board.phase
     if phase > 24:
         phase = 24
-
-    cdef int score_mg = 0
-    cdef int score_eg = 0
-    cdef int p_idx, sq_idx
-    cdef unsigned long long bb
-    
-    # White pieces (0-5)
-    for p_idx in range(6):
-        bb = board._bb[p_idx]
-        while bb:
-            sq_idx = _cy_lsb_impl2(bb)
-            bb = bb & ~(<unsigned long long>1 << sq_idx)
-            score_mg += white_piece_values_mg[p_idx][sq_idx]
-            score_eg += white_piece_values_eg[p_idx][sq_idx]
-
-    # Black pieces (6-11)
-    for p_idx in range(6):
-        bb = board._bb[p_idx + 6]
-        while bb:
-            sq_idx = _cy_lsb_impl2(bb)
-            bb = bb & ~(<unsigned long long>1 << sq_idx)
-            score_mg -= black_piece_values_mg[p_idx][sq_idx]
-            score_eg -= black_piece_values_eg[p_idx][sq_idx]
-
-    return <int>((score_mg * phase + score_eg * (24 - phase)) / 24)
+    return <int>((board.score_mg * phase + board.score_eg * (24 - phase)) / 24)
 
 
 # --- MVV-LVA Scoring ---
@@ -1124,10 +1249,10 @@ cdef int quiescence(
     int color,
     int ply,
     int qdepth = 0,
-) except *:
+) noexcept nogil:
     info.nodes += 1
 
-    cdef bint in_check = board.in_check()
+    cdef bint in_check = board.in_check_c()
     cdef int stand_pat = 0
     if not in_check:
         stand_pat = color * evaluate(board)
@@ -1172,20 +1297,30 @@ cdef int negamax(
     int beta,
     int color,
     int ply,
-    int extensions = 0,
-    int prev_move = -1,
-) except *:
+    int extensions,
+    int prev_move,
+    unsigned long long *search_history,
+    int root_history_len,
+) noexcept nogil:
     info.nodes += 1
 
     if info.nodes % 4096 == 0:
-        with nogil:
-            pass
-        if time.time() - info.start_time > info.time_limit:
+        if get_time_ms() - info.start_time > info.time_limit:
             info.stop = True
             return 0
 
+    search_history[root_history_len + ply] = board.zobrist_key
+
+    if ply > 0:
+        if board.halfmove_clock >= 100:
+            return 0
+        if not has_sufficient_material_bb(board._bb):
+            return 0
+        if is_repetition(search_history, root_history_len, ply, board.zobrist_key, board.halfmove_clock):
+            return 0
+
     cdef int alpha_orig = alpha
-    cdef bint in_check = board.in_check()
+    cdef bint in_check = board.in_check_c()
 
     # Check Extensions
     cdef int extended = 0
@@ -1242,8 +1377,8 @@ cdef int negamax(
 
         if has_non_pawn:
             R = 3 + depth // 4
-            if board.make_null_move():
-                val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended, -1)
+            if board.make_null_move_c():
+                val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended, -1, search_history, root_history_len)
                 board.unmake_move_c()
                 
                 if info.stop:
@@ -1252,7 +1387,7 @@ cdef int negamax(
                 if val >= beta:
                     # Verification search for deep cuts (anti-zugzwang verification)
                     if depth >= 6:
-                        val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended, prev_move)
+                        val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended, prev_move, search_history, root_history_len)
                         if val >= beta:
                             return val
                     else:
@@ -1317,7 +1452,7 @@ cdef int negamax(
         legal_moves_searched += 1
 
         if legal_moves_searched == 1:
-            val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move)
+            val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move, search_history, root_history_len)
         else:
             # --- Late Move Reductions (LMR) ---
             if (depth >= 2 and 
@@ -1349,18 +1484,18 @@ cdef int negamax(
                     r_int = depth - 1
 
                 # Search at reduced depth with null window
-                val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move)
+                val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move, search_history, root_history_len)
                 
                 # Re-search at full depth with null window if reduced search failed high
                 if val > alpha and r_int > 0:
-                    val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move)
+                    val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move, search_history, root_history_len)
             else:
                 # Search at full depth with null window
-                val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move)
+                val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move, search_history, root_history_len)
             
             # Re-search with full window if null window search failed high
             if val > alpha and val < beta:
-                val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move)
+                val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move, search_history, root_history_len)
         
         board.unmake_move_c()
 
@@ -1401,7 +1536,7 @@ cdef int negamax(
         return 0
 
     if legal_moves_searched == 0:
-        if board.in_check():
+        if board.in_check_c():
             return -99999 + ply
         return 0
 
@@ -1437,12 +1572,13 @@ def get_best_move_cy(
 ) -> object:
     """Finds the best move using iterative deepening search (Cython compiled)."""
     global info
-    info.start_time = time.time()
-    info.time_limit = time_limit
+    info.start_time = get_time_ms()
+    info.time_limit = time_limit * 1000.0
     info.stop = False
     info.nodes = 0
 
     cdef CustomBitboardBoard board = CustomBitboardBoard.from_chess_board(chess_board)
+    cdef bint stable = True
 
     memset(killer_moves, 0, sizeof(killer_moves))
     memset(history_moves, 0, sizeof(history_moves))
@@ -1453,12 +1589,23 @@ def get_best_move_cy(
     board._generate_legal_moves_c(&legal_moves)
     if legal_moves.count == 0:
         return None
+    if legal_moves.count == 1:
+        # Instantly return the only legal move (UCI standard / modern chess engine optimization)
+        return board.to_chess_move(legal_moves.moves[0])
 
     info.root_key = board.zobrist_key
     info.root_best_move = legal_moves.moves[0]
+    info.root_ponder_move = -1
 
     cdef int best_move_so_far = legal_moves.moves[0]
     cdef int color = 1 if board.side_to_move == WHITE else -1
+
+    # Initialize and populate game history array for repetition check
+    cdef unsigned long long search_history[1024]
+    cdef int root_history_len = board._history_len
+    cdef int i_hist
+    for i_hist in range(root_history_len):
+        search_history[i_hist] = board._history[i_hist].zobrist_key
 
     # Populate root state for copy-make
     cdef CGameState root_state
@@ -1471,6 +1618,9 @@ def get_best_move_cy(
     root_state.halfmove_clock  = board.halfmove_clock
     root_state.fullmove_number = board.fullmove_number
     root_state.zobrist_key     = board.zobrist_key
+    root_state.score_mg        = board.score_mg
+    root_state.score_eg        = board.score_eg
+    root_state.phase           = board.phase
 
     cdef int depth = 1
     cdef unsigned long long key = board.zobrist_key
@@ -1480,6 +1630,10 @@ def get_best_move_cy(
     cdef int delta = 15
     cdef int last_score = 0
     cdef int alpha_aw, beta_aw
+    
+    # Best moves history for stability detection (Dynamic Time Management)
+    cdef int best_moves_history[64]
+    memset(best_moves_history, 0, sizeof(best_moves_history))
 
     while not info.stop:
         if depth_limit > 0 and depth > depth_limit:
@@ -1488,9 +1642,9 @@ def get_best_move_cy(
         info.current_depth = depth
         if depth < 5:
             if search_mode == 1:
-                negamax_copymake(root_state, depth, -INFINITE, INFINITE, color, 0, 0, -1, board)
+                negamax_copymake(&root_state, depth, -INFINITE, INFINITE, color, 0, 0, -1, board, search_history, root_history_len)
             else:
-                negamax(board, depth, -INFINITE, INFINITE, color, 0)
+                negamax(board, depth, -INFINITE, INFINITE, color, 0, 0, -1, search_history, root_history_len)
             idx = key & (TT_SIZE - 1)
             entry = &_tt[idx]
             if entry.key == key:
@@ -1504,9 +1658,9 @@ def get_best_move_cy(
                 if beta_aw > INFINITE: beta_aw = INFINITE
                 
                 if search_mode == 1:
-                    score = negamax_copymake(root_state, depth, alpha_aw, beta_aw, color, 0, 0, -1, board)
+                    score = negamax_copymake(&root_state, depth, alpha_aw, beta_aw, color, 0, 0, -1, board, search_history, root_history_len)
                 else:
-                    score = negamax(board, depth, alpha_aw, beta_aw, color, 0)
+                    score = negamax(board, depth, alpha_aw, beta_aw, color, 0, 0, -1, search_history, root_history_len)
                 
                 if info.stop:
                     break
@@ -1550,18 +1704,43 @@ def get_best_move_cy(
             else:
                 score_str = f"cp {score}"
 
-            elapsed = time.time() - info.start_time
-            elapsed_ms = int(elapsed * 1000)
+            elapsed_ms = int(get_time_ms() - info.start_time)
+            elapsed = elapsed_ms / 1000.0
             nps = int(info.nodes / elapsed) if elapsed > 0.0 else 0
-            best_move_obj = board.to_chess_move(best_move_so_far)
-            best_move_uci = best_move_obj.uci()
+            
+            # Extract full PV line
+            pv_list = extract_pv(root_state, depth, board)
+            if len(pv_list) > 1:
+                info.root_ponder_move = pv_list[1]
+            else:
+                info.root_ponder_move = -1
+            
+            pv_str_list = []
+            for m in pv_list:
+                pv_str_list.append(board.to_chess_move(m).uci())
+            pv_line = " ".join(pv_str_list)
+            if not pv_line and best_move_so_far != -1:
+                pv_line = board.to_chess_move(best_move_so_far).uci()
+                
             print(
                 f"info depth {depth} score {score_str} nodes {info.nodes} "
-                f"nps {nps} time {elapsed_ms} pv {best_move_uci}",
+                f"nps {nps} time {elapsed_ms} pv {pv_line}",
                 flush=True,
             )
 
-        if time.time() - info.start_time > time_limit * 0.95:
+        # Dynamic Time Management: stable best move check
+        if depth < 64:
+            best_moves_history[depth] = best_move_so_far
+        stable = True
+        if depth >= 6:
+            for i_hist in range(depth - 3, depth + 1):
+                if best_moves_history[i_hist] != best_move_so_far:
+                    stable = False
+                    break
+            if stable and (get_time_ms() - info.start_time) > (time_limit * 1000.0 * 0.5):
+                break
+
+        if (get_time_ms() - info.start_time) > (time_limit * 1000.0 * 0.95):
             break
 
         depth += 1
@@ -1589,6 +1768,10 @@ def set_stop(bint val):
     global info
     info.stop = val
 
+def set_ponder_move(int val):
+    global info
+    info.root_ponder_move = val
+
 def get_start_time():
     return info.start_time
 
@@ -1615,6 +1798,9 @@ def generate_legal_moves_copymake(CustomBitboardBoard board):
     root_state.halfmove_clock  = board.halfmove_clock
     root_state.fullmove_number = board.fullmove_number
     root_state.zobrist_key     = board.zobrist_key
+    root_state.score_mg        = board.score_mg
+    root_state.score_eg        = board.score_eg
+    root_state.phase           = board.phase
 
     cdef CMoveList pseudo
     pseudo.count = 0
@@ -1635,13 +1821,13 @@ def generate_legal_moves_copymake(CustomBitboardBoard board):
     load_state_to_shell(&root_state, board)
     return legal_moves
 
-cdef long long run_perft_copymake_recursive(CGameState state, int depth, CustomBitboardBoard shell) except *:
+cdef long long run_perft_copymake_recursive(CGameState *state, int depth, CustomBitboardBoard shell) noexcept nogil:
     if depth == 0:
         return 1
 
     cdef CMoveList pseudo
     pseudo.count = 0
-    load_state_to_shell(&state, shell)
+    load_state_to_shell(state, shell)
     shell._generate_pseudo_legal_moves_c(&pseudo)
 
     cdef int i, move
@@ -1651,7 +1837,7 @@ cdef long long run_perft_copymake_recursive(CGameState state, int depth, CustomB
     if depth == 1:
         for i in range(pseudo.count):
             move = pseudo.moves[i]
-            child_state = state
+            child_state = state[0]
             make_move_on_state(&child_state, move)
             if is_state_legal(&child_state, shell, state.side_to_move):
                 nodes += 1
@@ -1659,10 +1845,10 @@ cdef long long run_perft_copymake_recursive(CGameState state, int depth, CustomB
 
     for i in range(pseudo.count):
         move = pseudo.moves[i]
-        child_state = state
+        child_state = state[0]
         make_move_on_state(&child_state, move)
         if is_state_legal(&child_state, shell, state.side_to_move):
-            nodes += run_perft_copymake_recursive(child_state, depth - 1, shell)
+            nodes += run_perft_copymake_recursive(&child_state, depth - 1, shell)
 
     return nodes
 
@@ -1677,8 +1863,11 @@ def run_perft_copymake(CustomBitboardBoard board, int depth):
     root_state.halfmove_clock  = board.halfmove_clock
     root_state.fullmove_number = board.fullmove_number
     root_state.zobrist_key     = board.zobrist_key
+    root_state.score_mg        = board.score_mg
+    root_state.score_eg        = board.score_eg
+    root_state.phase           = board.phase
 
-    cdef long long total_nodes = run_perft_copymake_recursive(root_state, depth, board)
+    cdef long long total_nodes = run_perft_copymake_recursive(&root_state, depth, board)
 
     # Restore board
     load_state_to_shell(&root_state, board)
@@ -1695,6 +1884,9 @@ def run_perft_copymake_divide(CustomBitboardBoard board, int depth):
     root_state.halfmove_clock  = board.halfmove_clock
     root_state.fullmove_number = board.fullmove_number
     root_state.zobrist_key     = board.zobrist_key
+    root_state.score_mg        = board.score_mg
+    root_state.score_eg        = board.score_eg
+    root_state.phase           = board.phase
 
     cdef CMoveList pseudo
     pseudo.count = 0
@@ -1711,7 +1903,7 @@ def run_perft_copymake_divide(CustomBitboardBoard board, int depth):
         make_move_on_state(&child_state, move)
         if is_state_legal(&child_state, board, root_state.side_to_move):
             if depth > 1:
-                nodes = run_perft_copymake_recursive(child_state, depth - 1, board)
+                nodes = run_perft_copymake_recursive(&child_state, depth - 1, board)
             else:
                 nodes = 1
             result[move] = nodes
@@ -1719,3 +1911,14 @@ def run_perft_copymake_divide(CustomBitboardBoard board, int depth):
     # Restore board
     load_state_to_shell(&root_state, board)
     return result
+
+def get_ponder_move():
+    return info.root_ponder_move
+
+def get_ponder_move_uci(object chess_board):
+    cdef CustomBitboardBoard board = CustomBitboardBoard.from_chess_board(chess_board)
+    cdef int m = get_ponder_move()
+    if m == -1:
+        return None
+    return board.to_chess_move(m).uci()
+

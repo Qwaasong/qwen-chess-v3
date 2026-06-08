@@ -17,9 +17,19 @@ except ImportError:
 # Track hash and threads options set by GUI
 HASH_SIZE_MB: int = 16
 THREADS_COUNT: int = 1
+SEARCH_MODE: int = 1  # 1 = Copy-Make, 0 = Make-Unmake
 
-# Active search thread
+# Active search thread and pondering state
 search_thread: Optional[threading.Thread] = None
+is_pondering: bool = False
+ponder_start_time: float = 0.0
+last_wtime: Optional[int] = None
+last_btime: Optional[int] = None
+last_winc: Optional[int] = None
+last_binc: Optional[int] = None
+last_movetime: Optional[int] = None
+last_depth_limit: Optional[int] = None
+last_infinite: bool = False
 
 
 def search_task(
@@ -37,9 +47,16 @@ def search_task(
         time_limit=time_limit,
         depth_limit=d_limit,
         print_info=True,
+        search_mode=SEARCH_MODE,
     )
+    
+    # Retrieve ponder move if available from PV
+    ponder_move_uci = engine.get_ponder_move_uci(chess_board)
+    
     if best_move is None:
         print("bestmove (none)", flush=True)
+    elif ponder_move_uci:
+        print(f"bestmove {best_move.uci()} ponder {ponder_move_uci}", flush=True)
     else:
         print(f"bestmove {best_move.uci()}", flush=True)
 
@@ -99,7 +116,8 @@ def stop_search() -> None:
 
 def main() -> None:
     """Main UCI loop processing stdin."""
-    global search_thread, HASH_SIZE_MB, THREADS_COUNT
+    global search_thread, HASH_SIZE_MB, THREADS_COUNT, SEARCH_MODE
+    global is_pondering, ponder_start_time, last_wtime, last_btime, last_winc, last_binc, last_movetime, last_depth_limit, last_infinite
     board = chess.Board()
 
     for line in sys.stdin:
@@ -121,6 +139,10 @@ def main() -> None:
                 "option name Threads type spin default 1 min 1 max 1",
                 flush=True,
             )
+            print(
+                "option name SearchMode type combo default Copy-Make var Copy-Make var Make-Unmake",
+                flush=True,
+            )
             print("uciok", flush=True)
 
         elif command == "isready":
@@ -129,6 +151,7 @@ def main() -> None:
         elif command == "setoption":
             # setoption name Hash value 32
             # setoption name Threads value 1
+            # setoption name SearchMode value Copy-Make
             try:
                 name_idx = words.index("name")
                 value_idx = words.index("value")
@@ -139,6 +162,11 @@ def main() -> None:
                     HASH_SIZE_MB = int(opt_val)
                 elif opt_name.lower() == "threads":
                     THREADS_COUNT = int(opt_val)
+                elif opt_name.lower() == "searchmode":
+                    if opt_val.lower() == "copy-make":
+                        SEARCH_MODE = 1
+                    elif opt_val.lower() == "make-unmake":
+                        SEARCH_MODE = 0
             except (ValueError, IndexError):
                 pass
 
@@ -155,13 +183,14 @@ def main() -> None:
             stop_search()
 
             # Parse go parameters
-            wtime: Optional[int] = None
-            btime: Optional[int] = None
-            winc: Optional[int] = None
-            binc: Optional[int] = None
-            movetime: Optional[int] = None
-            depth_limit: Optional[int] = None
+            wtime = None
+            btime = None
+            winc = None
+            binc = None
+            movetime = None
+            depth_limit = None
             infinite = False
+            ponder_search = False
 
             i = 1
             while i < len(words):
@@ -187,15 +216,34 @@ def main() -> None:
                 elif token == "infinite":
                     infinite = True
                     i += 1
+                elif token == "ponder":
+                    ponder_search = True
+                    i += 1
                 else:
                     i += 1
 
+            # Save parameters for ponderhit
+            last_wtime = wtime
+            last_btime = btime
+            last_winc = winc
+            last_binc = binc
+            last_movetime = movetime
+            last_depth_limit = depth_limit
+            last_infinite = infinite
+
             # Determine time limit
-            if movetime is not None:
+            if ponder_search:
+                is_pondering = True
+                ponder_start_time = time.time()
+                time_limit = 86400.0  # Search virtually indefinitely until ponderhit or stop
+            elif movetime is not None:
+                is_pondering = False
                 time_limit = movetime / 1000.0
             elif infinite:
+                is_pondering = False
                 time_limit = 86400.0
             else:
+                is_pondering = False
                 # Time management formula
                 time_left = wtime if board.turn == chess.WHITE else btime
                 inc = winc if board.turn == chess.WHITE else binc
@@ -213,10 +261,35 @@ def main() -> None:
             )
             search_thread.start()
 
+        elif command == "ponderhit":
+            if is_pondering:
+                is_pondering = False
+                elapsed = time.time() - ponder_start_time
+                
+                # Recalculate target time limit based on saved parameters
+                if last_movetime is not None:
+                    target = last_movetime / 1000.0
+                elif last_infinite:
+                    target = 86400.0
+                else:
+                    time_left = last_wtime if board.turn == chess.WHITE else last_btime
+                    inc = last_winc if board.turn == chess.WHITE else last_binc
+                    if time_left is not None:
+                        time_left_sec = time_left / 1000.0
+                        inc_sec = (inc / 1000.0) if inc is not None else 0.0
+                        target = max(0.05, time_left_sec / 20.0 + inc_sec / 2.0)
+                    else:
+                        target = 2.0
+                
+                # Signal transition: dynamically set the engine time limit
+                engine.info.time_limit = (elapsed + target) * 1000.0
+
         elif command == "stop":
+            is_pondering = False
             stop_search()
 
         elif command == "quit":
+            is_pondering = False
             stop_search()
             sys.exit(0)
 

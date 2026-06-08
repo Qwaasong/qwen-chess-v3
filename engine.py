@@ -196,6 +196,7 @@ class SearchInfo:
         self.time_limit = 0.0
         self.stop = False
         self.current_depth = 0
+        self.root_ponder_move = -1
 
 
 info = SearchInfo()
@@ -744,6 +745,7 @@ try:
         print_info: bool = False,
         search_mode: int = 1,
     ) -> chess.Move | None:
+        info.root_ponder_move = -1
         key = " ".join(chess_board.fen().split()[:4])
         if key in OPENING_BOOK:
             moves = OPENING_BOOK[key]
@@ -782,21 +784,39 @@ try:
         @time_limit.setter
         def time_limit(self, value):
             engine_cy.set_time_limit(value)
+        @property
+        def root_ponder_move(self):
+            return engine_cy.get_ponder_move()
+        @root_ponder_move.setter
+        def root_ponder_move(self, value):
+            engine_cy.set_ponder_move(value)
 
     info = CythonInfoWrapper()
 
     def clear_tt():
         engine_cy.clear_tt()
+
+    def get_ponder_move():
+        return engine_cy.get_ponder_move()
+
+    def get_ponder_move_uci(chess_board):
+        return engine_cy.get_ponder_move_uci(chess_board)
 except ImportError:
     def clear_tt():
         global tt
         tt.clear()
 
+    def get_ponder_move():
+        return -1
+
+    def get_ponder_move_uci(chess_board):
+        return None
+
 
 def main() -> None:
     """Main function to test the chess engine v3 on a specific position."""
     test_board = chess.Board(
-        "3kNr2/p1ppppNq/Ppr1p2p/8/1R6/8/1Q3BB1/1R2b2K w - - 0 1"
+        "7k/8/1K2PPPP/8/B7/8/4pppp/8 w - - 0 1"
     )
     print("Testing Engine v3 on starting position:")
     print(test_board)

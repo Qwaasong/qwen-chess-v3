@@ -11,6 +11,9 @@ cdef struct CGameState:
     int fullmove_number
     int piece_map[64]
     unsigned long long zobrist_key
+    int score_mg
+    int score_eg
+    int phase
 
 cdef struct CMoveList:
     int moves[256]
@@ -28,14 +31,20 @@ cdef class CustomBitboardBoard:
     cdef int _history_len
     cdef unsigned long long _bb[12]
     cdef unsigned long long _occ[3]
+    cdef public int score_mg
+    cdef public int score_eg
+    cdef public int phase
 
-    cdef unsigned long long _recompute_zobrist(self)
-    cdef void _generate_pseudo_legal_moves_c(self, CMoveList *move_list)
-    cdef void _generate_captures_c(self, CMoveList *move_list)
-    cdef void _generate_quiets_c(self, CMoveList *move_list)
-    cdef void _generate_legal_moves_c(self, CMoveList *move_list)
-    cdef bint make_move_c(self, int move)
-    cdef void unmake_move_c(self)
+    cdef unsigned long long _recompute_zobrist(self) noexcept nogil
+    cdef void _generate_pseudo_legal_moves_c(self, CMoveList *move_list) noexcept nogil
+    cdef void _generate_captures_c(self, CMoveList *move_list) noexcept nogil
+    cdef void _generate_quiets_c(self, CMoveList *move_list) noexcept nogil
+    cdef void _generate_legal_moves_c(self, CMoveList *move_list) noexcept nogil
+    cdef bint make_move_c(self, int move) noexcept nogil
+    cdef void unmake_move_c(self) noexcept nogil
+    cdef bint is_square_attacked_c(self, int sq, int attacker_color) noexcept nogil
+    cdef bint in_check_c(self) noexcept nogil
+    cdef bint make_null_move_c(self) noexcept nogil
 
     cpdef object get_piece_at(self, int square)
     cpdef bint is_square_attacked(self, int sq, int attacker_color)
