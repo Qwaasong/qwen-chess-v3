@@ -31,6 +31,8 @@ cdef class CustomBitboardBoard:
 
     cdef unsigned long long _recompute_zobrist(self)
     cdef void _generate_pseudo_legal_moves_c(self, CMoveList *move_list)
+    cdef void _generate_captures_c(self, CMoveList *move_list)
+    cdef void _generate_quiets_c(self, CMoveList *move_list)
     cdef void _generate_legal_moves_c(self, CMoveList *move_list)
     cdef bint make_move_c(self, int move)
     cdef void unmake_move_c(self)
@@ -44,3 +46,8 @@ cdef class CustomBitboardBoard:
     cpdef void unmake_move(self)
     cpdef bint make_null_move(self)
     cpdef long long run_perft_recursive(self, int depth)
+
+cdef public unsigned long long ZOBRIST_PIECES[12][64]
+cdef public unsigned long long ZOBRIST_CASTLING[16]
+cdef public unsigned long long ZOBRIST_EP[8]
+cdef public unsigned long long ZOBRIST_SIDE

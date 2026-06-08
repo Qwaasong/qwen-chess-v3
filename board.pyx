@@ -442,10 +442,10 @@ def get_move_flag(int move):
 # ---------------------------------------------------------------------------
 # Zobrist Keys & Initialization
 # ---------------------------------------------------------------------------
-cdef unsigned long long ZOBRIST_PIECES[12][64]
-cdef unsigned long long ZOBRIST_CASTLING[16]
-cdef unsigned long long ZOBRIST_EP[8]
-cdef unsigned long long ZOBRIST_SIDE
+cdef public unsigned long long ZOBRIST_PIECES[12][64]
+cdef public unsigned long long ZOBRIST_CASTLING[16]
+cdef public unsigned long long ZOBRIST_EP[8]
+cdef public unsigned long long ZOBRIST_SIDE
 
 cdef void _init_zobrist() noexcept:
     cdef unsigned long long state = 1070372ULL
@@ -805,6 +805,281 @@ cdef class CustomBitboardBoard:
                 cy_add_move(move_list, cy_encode_move(from_sq, to_sq, FLAG_NORMAL))
 
             # Castling
+            if side == WHITE:
+                if (
+                    (self.castling_rights & WK)
+                    and not cy_get_bit(both_occ, F1)
+                    and not cy_get_bit(both_occ, G1)
+                    and not self.is_square_attacked(E1, BLACK)
+                    and not self.is_square_attacked(F1, BLACK)
+                ):
+                    cy_add_move(move_list, cy_encode_move(E1, G1, FLAG_CASTLE))
+                if (
+                    (self.castling_rights & WQ)
+                    and not cy_get_bit(both_occ, D1)
+                    and not cy_get_bit(both_occ, C1)
+                    and not cy_get_bit(both_occ, B1)
+                    and not self.is_square_attacked(E1, BLACK)
+                    and not self.is_square_attacked(D1, BLACK)
+                ):
+                    cy_add_move(move_list, cy_encode_move(E1, C1, FLAG_CASTLE))
+            else:
+                if (
+                    (self.castling_rights & BK)
+                    and not cy_get_bit(both_occ, F8)
+                    and not cy_get_bit(both_occ, G8)
+                    and not self.is_square_attacked(E8, WHITE)
+                    and not self.is_square_attacked(F8, WHITE)
+                ):
+                    cy_add_move(move_list, cy_encode_move(E8, G8, FLAG_CASTLE))
+                if (
+                    (self.castling_rights & BQ)
+                    and not cy_get_bit(both_occ, D8)
+                    and not cy_get_bit(both_occ, C8)
+                    and not cy_get_bit(both_occ, B8)
+                    and not self.is_square_attacked(E8, WHITE)
+                    and not self.is_square_attacked(D8, WHITE)
+                ):
+                    cy_add_move(move_list, cy_encode_move(E8, C8, FLAG_CASTLE))
+
+    cdef void _generate_captures_c(self, CMoveList *move_list):
+        """Generates pseudo-legal captures and promotions for the current side to move (C-level)."""
+        cdef int side = self.side_to_move
+        cdef unsigned long long friendly_occ = self._occ[WHITE if side == WHITE else BLACK]
+        cdef unsigned long long opponent_occ = self._occ[BLACK if side == WHITE else WHITE]
+        cdef unsigned long long both_occ = self._occ[2]
+
+        cdef int offset = 0 if side == WHITE else 6
+        cdef unsigned long long pawn_bb   = self._bb[P_P + offset]
+        cdef unsigned long long knight_bb = self._bb[P_N + offset]
+        cdef unsigned long long bishop_bb = self._bb[P_B + offset]
+        cdef unsigned long long rook_bb   = self._bb[P_R + offset]
+        cdef unsigned long long queen_bb  = self._bb[P_Q + offset]
+        cdef unsigned long long king_bb   = self._bb[P_K + offset]
+
+        cdef unsigned long long pawn_sqs, dest_sqs, knights, bishops, rooks, queens, king_iter
+        cdef int from_sq, to_sq, r, f, dest_sq, flag
+
+        # --- Pawn Captures & Promotions ---
+        pawn_sqs = pawn_bb
+        while pawn_sqs:
+            from_sq = cy_lsb(pawn_sqs)
+            pawn_sqs = cy_clear_bit(pawn_sqs, from_sq)
+            r = from_sq // 8
+            f = from_sq % 8
+
+            if side == WHITE:
+                # Promotion without capture
+                if r == 6:
+                    to_sq = from_sq + 8
+                    if to_sq < 64 and not cy_get_bit(both_occ, to_sq):
+                        for flag in [FLAG_PROMOTE_Q, FLAG_PROMOTE_R, FLAG_PROMOTE_B, FLAG_PROMOTE_N]:
+                            cy_add_move(move_list, cy_encode_move(from_sq, to_sq, flag))
+                # Captures (with or without promotion)
+                if f > 0:
+                    dest_sq = from_sq + 7
+                    if dest_sq < 64:
+                        if cy_get_bit(opponent_occ, dest_sq):
+                            if r == 6:
+                                for flag in [FLAG_PROMOTE_Q, FLAG_PROMOTE_R, FLAG_PROMOTE_B, FLAG_PROMOTE_N]:
+                                    cy_add_move(move_list, cy_encode_move(from_sq, dest_sq, flag))
+                            else:
+                                cy_add_move(move_list, cy_encode_move(from_sq, dest_sq, FLAG_NORMAL))
+                        elif dest_sq == self.en_passant_sq:
+                            cy_add_move(move_list, cy_encode_move(from_sq, dest_sq, FLAG_EP))
+                if f < 7:
+                    dest_sq = from_sq + 9
+                    if dest_sq < 64:
+                        if cy_get_bit(opponent_occ, dest_sq):
+                            if r == 6:
+                                for flag in [FLAG_PROMOTE_Q, FLAG_PROMOTE_R, FLAG_PROMOTE_B, FLAG_PROMOTE_N]:
+                                    cy_add_move(move_list, cy_encode_move(from_sq, dest_sq, flag))
+                            else:
+                                cy_add_move(move_list, cy_encode_move(from_sq, dest_sq, FLAG_NORMAL))
+                        elif dest_sq == self.en_passant_sq:
+                            cy_add_move(move_list, cy_encode_move(from_sq, dest_sq, FLAG_EP))
+            else:
+                # Promotion without capture
+                if r == 1:
+                    to_sq = from_sq - 8
+                    if to_sq >= 0 and not cy_get_bit(both_occ, to_sq):
+                        for flag in [FLAG_PROMOTE_Q, FLAG_PROMOTE_R, FLAG_PROMOTE_B, FLAG_PROMOTE_N]:
+                            cy_add_move(move_list, cy_encode_move(from_sq, to_sq, flag))
+                # Captures (with or without promotion)
+                if f > 0:
+                    dest_sq = from_sq - 9
+                    if dest_sq >= 0:
+                        if cy_get_bit(opponent_occ, dest_sq):
+                            if r == 1:
+                                for flag in [FLAG_PROMOTE_Q, FLAG_PROMOTE_R, FLAG_PROMOTE_B, FLAG_PROMOTE_N]:
+                                    cy_add_move(move_list, cy_encode_move(from_sq, dest_sq, flag))
+                            else:
+                                cy_add_move(move_list, cy_encode_move(from_sq, dest_sq, FLAG_NORMAL))
+                        elif dest_sq == self.en_passant_sq:
+                            cy_add_move(move_list, cy_encode_move(from_sq, dest_sq, FLAG_EP))
+                if f < 7:
+                    dest_sq = from_sq - 7
+                    if dest_sq >= 0:
+                        if cy_get_bit(opponent_occ, dest_sq):
+                            if r == 1:
+                                for flag in [FLAG_PROMOTE_Q, FLAG_PROMOTE_R, FLAG_PROMOTE_B, FLAG_PROMOTE_N]:
+                                    cy_add_move(move_list, cy_encode_move(from_sq, dest_sq, flag))
+                            else:
+                                cy_add_move(move_list, cy_encode_move(from_sq, dest_sq, FLAG_NORMAL))
+                        elif dest_sq == self.en_passant_sq:
+                            cy_add_move(move_list, cy_encode_move(from_sq, dest_sq, FLAG_EP))
+
+        # --- Knight Captures ---
+        knights = knight_bb
+        while knights:
+            from_sq = cy_lsb(knights)
+            knights = cy_clear_bit(knights, from_sq)
+            dest_sqs = _KNIGHT_ATTACKS[from_sq] & opponent_occ
+            while dest_sqs:
+                to_sq = cy_lsb(dest_sqs)
+                dest_sqs = cy_clear_bit(dest_sqs, to_sq)
+                cy_add_move(move_list, cy_encode_move(from_sq, to_sq, FLAG_NORMAL))
+
+        # --- Bishop Captures ---
+        bishops = bishop_bb
+        while bishops:
+            from_sq = cy_lsb(bishops)
+            bishops = cy_clear_bit(bishops, from_sq)
+            dest_sqs = cy_get_bishop_attacks(from_sq, both_occ) & opponent_occ
+            while dest_sqs:
+                to_sq = cy_lsb(dest_sqs)
+                dest_sqs = cy_clear_bit(dest_sqs, to_sq)
+                cy_add_move(move_list, cy_encode_move(from_sq, to_sq, FLAG_NORMAL))
+
+        # --- Rook Captures ---
+        rooks = rook_bb
+        while rooks:
+            from_sq = cy_lsb(rooks)
+            rooks = cy_clear_bit(rooks, from_sq)
+            dest_sqs = cy_get_rook_attacks(from_sq, both_occ) & opponent_occ
+            while dest_sqs:
+                to_sq = cy_lsb(dest_sqs)
+                dest_sqs = cy_clear_bit(dest_sqs, to_sq)
+                cy_add_move(move_list, cy_encode_move(from_sq, to_sq, FLAG_NORMAL))
+
+        # --- Queen Captures ---
+        queens = queen_bb
+        while queens:
+            from_sq = cy_lsb(queens)
+            queens = cy_clear_bit(queens, from_sq)
+            dest_sqs = cy_get_queen_attacks(from_sq, both_occ) & opponent_occ
+            while dest_sqs:
+                to_sq = cy_lsb(dest_sqs)
+                dest_sqs = cy_clear_bit(dest_sqs, to_sq)
+                cy_add_move(move_list, cy_encode_move(from_sq, to_sq, FLAG_NORMAL))
+
+        # --- King Captures ---
+        king_iter = king_bb
+        if king_iter:
+            from_sq = cy_lsb(king_iter)
+            dest_sqs = _KING_ATTACKS[from_sq] & opponent_occ
+            while dest_sqs:
+                to_sq = cy_lsb(dest_sqs)
+                dest_sqs = cy_clear_bit(dest_sqs, to_sq)
+                cy_add_move(move_list, cy_encode_move(from_sq, to_sq, FLAG_NORMAL))
+
+    cdef void _generate_quiets_c(self, CMoveList *move_list):
+        """Generates pseudo-legal quiet moves (non-captures) for the current side to move (C-level)."""
+        cdef int side = self.side_to_move
+        cdef unsigned long long friendly_occ = self._occ[WHITE if side == WHITE else BLACK]
+        cdef unsigned long long opponent_occ = self._occ[BLACK if side == WHITE else WHITE]
+        cdef unsigned long long both_occ = self._occ[2]
+
+        cdef int offset = 0 if side == WHITE else 6
+        cdef unsigned long long pawn_bb   = self._bb[P_P + offset]
+        cdef unsigned long long knight_bb = self._bb[P_N + offset]
+        cdef unsigned long long bishop_bb = self._bb[P_B + offset]
+        cdef unsigned long long rook_bb   = self._bb[P_R + offset]
+        cdef unsigned long long queen_bb  = self._bb[P_Q + offset]
+        cdef unsigned long long king_bb   = self._bb[P_K + offset]
+
+        cdef unsigned long long pawn_sqs, dest_sqs, knights, bishops, rooks, queens, king_iter
+        cdef int from_sq, to_sq, to_sq2, r, f
+
+        # --- Pawn Quiet Moves ---
+        pawn_sqs = pawn_bb
+        while pawn_sqs:
+            from_sq = cy_lsb(pawn_sqs)
+            pawn_sqs = cy_clear_bit(pawn_sqs, from_sq)
+            r = from_sq // 8
+
+            if side == WHITE:
+                if r < 6: # promotions are handled in captures
+                    to_sq = from_sq + 8
+                    if to_sq < 64 and not cy_get_bit(both_occ, to_sq):
+                        cy_add_move(move_list, cy_encode_move(from_sq, to_sq, FLAG_NORMAL))
+                        to_sq2 = from_sq + 16
+                        if r == 1 and not cy_get_bit(both_occ, to_sq2):
+                            cy_add_move(move_list, cy_encode_move(from_sq, to_sq2, FLAG_DOUBLE_PUSH))
+            else:
+                if r > 1: # promotions are handled in captures
+                    to_sq = from_sq - 8
+                    if to_sq >= 0 and not cy_get_bit(both_occ, to_sq):
+                        cy_add_move(move_list, cy_encode_move(from_sq, to_sq, FLAG_NORMAL))
+                        to_sq2 = from_sq - 16
+                        if r == 6 and not cy_get_bit(both_occ, to_sq2):
+                            cy_add_move(move_list, cy_encode_move(from_sq, to_sq2, FLAG_DOUBLE_PUSH))
+
+        # --- Knight Quiets ---
+        knights = knight_bb
+        while knights:
+            from_sq = cy_lsb(knights)
+            knights = cy_clear_bit(knights, from_sq)
+            dest_sqs = _KNIGHT_ATTACKS[from_sq] & ~both_occ
+            while dest_sqs:
+                to_sq = cy_lsb(dest_sqs)
+                dest_sqs = cy_clear_bit(dest_sqs, to_sq)
+                cy_add_move(move_list, cy_encode_move(from_sq, to_sq, FLAG_NORMAL))
+
+        # --- Bishop Quiets ---
+        bishops = bishop_bb
+        while bishops:
+            from_sq = cy_lsb(bishops)
+            bishops = cy_clear_bit(bishops, from_sq)
+            dest_sqs = cy_get_bishop_attacks(from_sq, both_occ) & ~both_occ
+            while dest_sqs:
+                to_sq = cy_lsb(dest_sqs)
+                dest_sqs = cy_clear_bit(dest_sqs, to_sq)
+                cy_add_move(move_list, cy_encode_move(from_sq, to_sq, FLAG_NORMAL))
+
+        # --- Rook Quiets ---
+        rooks = rook_bb
+        while rooks:
+            from_sq = cy_lsb(rooks)
+            rooks = cy_clear_bit(rooks, from_sq)
+            dest_sqs = cy_get_rook_attacks(from_sq, both_occ) & ~both_occ
+            while dest_sqs:
+                to_sq = cy_lsb(dest_sqs)
+                dest_sqs = cy_clear_bit(dest_sqs, to_sq)
+                cy_add_move(move_list, cy_encode_move(from_sq, to_sq, FLAG_NORMAL))
+
+        # --- Queen Quiets ---
+        queens = queen_bb
+        while queens:
+            from_sq = cy_lsb(queens)
+            queens = cy_clear_bit(queens, from_sq)
+            dest_sqs = cy_get_queen_attacks(from_sq, both_occ) & ~both_occ
+            while dest_sqs:
+                to_sq = cy_lsb(dest_sqs)
+                dest_sqs = cy_clear_bit(dest_sqs, to_sq)
+                cy_add_move(move_list, cy_encode_move(from_sq, to_sq, FLAG_NORMAL))
+
+        # --- King Quiets & Castling ---
+        king_iter = king_bb
+        if king_iter:
+            from_sq = cy_lsb(king_iter)
+            dest_sqs = _KING_ATTACKS[from_sq] & ~both_occ
+            while dest_sqs:
+                to_sq = cy_lsb(dest_sqs)
+                dest_sqs = cy_clear_bit(dest_sqs, to_sq)
+                cy_add_move(move_list, cy_encode_move(from_sq, to_sq, FLAG_NORMAL))
+
+            # Castling (Quiet moves)
             if side == WHITE:
                 if (
                     (self.castling_rights & WK)

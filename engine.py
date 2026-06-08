@@ -295,6 +295,7 @@ def quiescence(
     beta: int,
     color: int,
     ply: int,
+    qdepth: int = 0,
 ) -> int:
     """Quiescence search to avoid horizon effect on captures and checks."""
     info.nodes += 1
@@ -323,7 +324,6 @@ def quiescence(
                 score += 9000
             moves_to_search.append((score, move))
     else:
-        qdepth = ply - info.current_depth
         for move in pseudo_moves:
             to_sq = get_move_dest(move)
             flag = get_move_flag(move)
@@ -348,7 +348,7 @@ def quiescence(
             board.unmake_move()
             continue
         legal_moves_searched += 1
-        val = -quiescence(board, -beta, -alpha, -color, ply + 1)
+        val = -quiescence(board, -beta, -alpha, -color, ply + 1, qdepth + 1)
         board.unmake_move()
 
         if val >= beta:
@@ -404,14 +404,11 @@ def negamax(
             flag = tt_entry['flag']
             if flag == 0:  # Exact
                 return val
-            if flag == 1:  # Lower bound
-                if val >= beta:
-                    return val
+            elif flag == 1:  # Lower bound
                 alpha = max(alpha, val)
-            if flag == 2:  # Upper bound
-                if val <= alpha:
-                    return val
+            elif flag == 2:  # Upper bound
                 beta = min(beta, val)
+
             if alpha >= beta:
                 return val
         tt_move = tt_entry.get('move')
@@ -454,13 +451,21 @@ def negamax(
                         return val
 
     if depth <= 0:
-        val = quiescence(board, alpha, beta, color, ply)
+        val = quiescence(board, alpha, beta, color, ply, 0)
         tt_val = val
         if tt_val > MATE_THRESHOLD:
             tt_val += ply
         elif tt_val < -MATE_THRESHOLD:
             tt_val -= ply
-        tt[key] = {'depth': 0, 'val': tt_val, 'flag': 0, 'move': None}
+
+        q_flag = 0
+        if val <= alpha:
+            q_flag = 2
+        elif val >= beta:
+            q_flag = 1
+
+        if key not in tt or 0 >= tt[key]['depth']:
+            tt[key] = {'depth': 0, 'val': tt_val, 'flag': q_flag, 'move': None}
         return val
 
     pseudo_moves = board.generate_pseudo_legal_moves()
@@ -513,43 +518,51 @@ def negamax(
         
         legal_moves_searched += 1
 
-        # --- Late Move Reductions (LMR) ---
-        if (depth >= 2 and 
-            legal_moves_searched > 1 and 
-            not is_cap and 
-            flag < FLAG_PROMOTE_N and 
-            not in_check):
-            
-            # Lookup reduction from precomputed table
-            r_val = LMR_REDUCTIONS[depth][legal_moves_searched] if legal_moves_searched < 64 else LMR_REDUCTIONS[depth][63]
-            r_int = r_val // 1024
-
-            # Reductions tuning
-            if pv_node:
-                r_int -= 1
-            if move == killer_moves[0][ply] or move == killer_moves[1][ply]:
-                r_int -= 1
-            
-            p_type = board.get_piece_at(to_sq) # the piece is already moved to to_sq
-            if p_type is not None:
-                if history_moves[p_type][to_sq] > 2000:
-                    r_int -= 1
-                elif history_moves[p_type][to_sq] < 500:
-                    r_int += 1
-
-            if r_int < 1:
-                r_int = 1
-            if r_int >= depth:
-                r_int = depth - 1
-
-            # Search at reduced depth with null window
-            val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)
-            
-            # Re-search if reduced search failed high
-            if val > alpha and r_int > 0:
-                val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)
-        else:
+        if legal_moves_searched == 1:
             val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)
+        else:
+            # --- Late Move Reductions (LMR) ---
+            if (depth >= 2 and 
+                legal_moves_searched > 1 and 
+                not is_cap and 
+                flag < FLAG_PROMOTE_N and 
+                not in_check):
+                
+                # Lookup reduction from precomputed table
+                r_val = LMR_REDUCTIONS[depth][legal_moves_searched] if legal_moves_searched < 64 else LMR_REDUCTIONS[depth][63]
+                r_int = r_val // 1024
+
+                # Reductions tuning
+                if pv_node:
+                    r_int -= 1
+                if move == killer_moves[0][ply] or move == killer_moves[1][ply]:
+                    r_int -= 1
+                
+                p_type = board.get_piece_at(to_sq) # the piece is already moved to to_sq
+                if p_type is not None:
+                    if history_moves[p_type][to_sq] > 2000:
+                        r_int -= 1
+                    elif history_moves[p_type][to_sq] < 500:
+                        r_int += 1
+
+                if r_int < 1:
+                    r_int = 1
+                if r_int >= depth:
+                    r_int = depth - 1
+
+                # Search at reduced depth with null window
+                val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)
+                
+                # Re-search at full depth with null window if reduced search failed high
+                if val > alpha and r_int > 0:
+                    val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)
+            else:
+                # Search at full depth with null window
+                val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)
+            
+            # Re-search with full window if null window search failed high
+            if val > alpha and val < beta:
+                val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)
         
         board.unmake_move()
 
@@ -597,7 +610,8 @@ def negamax(
     elif tt_val < -MATE_THRESHOLD:
         tt_val -= ply
 
-    tt[key] = {'depth': depth, 'val': tt_val, 'flag': tt_flag, 'move': best_move}
+    if key not in tt or depth >= tt[key]['depth']:
+        tt[key] = {'depth': depth, 'val': tt_val, 'flag': tt_flag, 'move': best_move}
     return best_val
 
 
@@ -728,13 +742,14 @@ try:
         time_limit: float = 1.0,
         depth_limit: int = 0,
         print_info: bool = False,
+        search_mode: int = 1,
     ) -> chess.Move | None:
         key = " ".join(chess_board.fen().split()[:4])
         if key in OPENING_BOOK:
             moves = OPENING_BOOK[key]
             if moves:
                 return random.choice(moves)
-        return _get_best_move_cy(chess_board, time_limit, depth_limit, print_info)
+        return _get_best_move_cy(chess_board, time_limit, depth_limit, print_info, search_mode)
 
     class CythonInfoWrapper:
         @property

@@ -9,9 +9,17 @@
 import time
 import random
 import chess
-from libc.string cimport memset
+from libc.string cimport memset, memcpy
 from libc.math cimport log
-from board_cy cimport CustomBitboardBoard, CMoveList
+from board_cy cimport (
+    CustomBitboardBoard,
+    CMoveList,
+    CGameState,
+    ZOBRIST_PIECES,
+    ZOBRIST_CASTLING,
+    ZOBRIST_EP,
+    ZOBRIST_SIDE,
+)
 
 # --- Constants ---
 cdef int WHITE = 0
@@ -242,9 +250,10 @@ cdef struct TTEntry:
 DEF TT_SIZE = 1048576
 cdef TTEntry _tt[TT_SIZE]
 
-# Killer Moves & History Heuristics
+# Killer Moves, History, and Countermove Heuristics
 cdef int killer_moves[2][64]
 cdef int history_moves[12][64]
+cdef int counter_moves[12][64]
 
 # LMR Reductions
 cdef int LMR_REDUCTIONS[64][64]
@@ -277,6 +286,758 @@ cdef inline void sort_moves(CScoredMoveList *mlist) noexcept nogil:
             mlist.moves[j + 1] = mlist.moves[j]
             j -= 1
         mlist.moves[j + 1] = temp
+
+# --- Move Picker Stages ---
+cdef enum MovePickerStage:
+    STAGE_TT_MOVE = 0
+    STAGE_GEN_CAPTURES = 1
+    STAGE_CAPTURES = 2
+    STAGE_KILLERS = 3
+    STAGE_COUNTERMOVE = 4
+    STAGE_GEN_QUIETS = 5
+    STAGE_QUIETS = 6
+    STAGE_DONE = 7
+
+cdef enum QMovePickerStage:
+    QSTAGE_GEN_CAPTURES = 0
+    QSTAGE_CAPTURES = 1
+    QSTAGE_QUIET_CHECKS = 2
+    QSTAGE_DONE = 3
+
+cdef struct MovePicker:
+    int stage
+    int tt_move
+    int killer_0
+    int killer_1
+    int counter_move
+    CScoredMoveList captures
+    CScoredMoveList quiets
+    bint captures_generated
+    bint quiets_generated
+    int capture_idx
+    int quiet_idx
+
+cdef struct QMovePicker:
+    int stage
+    int index
+    bint in_check
+    int qdepth
+    CScoredMoveList moves
+
+cdef inline void init_move_picker(
+    MovePicker *mp,
+    int tt_move,
+    int killer_0,
+    int killer_1,
+    int counter_move
+) noexcept nogil:
+    mp.stage = STAGE_TT_MOVE
+    mp.tt_move = tt_move
+    mp.killer_0 = killer_0
+    mp.killer_1 = killer_1
+    mp.counter_move = counter_move
+    mp.captures.count = 0
+    mp.quiets.count = 0
+    mp.captures_generated = False
+    mp.quiets_generated = False
+    mp.capture_idx = 0
+    mp.quiet_idx = 0
+
+cdef inline void generate_and_score_captures(MovePicker *mp, CustomBitboardBoard board) noexcept:
+    cdef CMoveList raw_moves
+    raw_moves.count = 0
+    board._generate_captures_c(&raw_moves)
+    
+    mp.captures.count = 0
+    cdef int i, move
+    for i in range(raw_moves.count):
+        move = raw_moves.moves[i]
+        mp.captures.moves[i].move = move
+        mp.captures.moves[i].score = get_mvv_lva_score(board, move)
+    mp.captures.count = raw_moves.count
+    sort_moves(&mp.captures)
+    mp.captures_generated = True
+
+cdef inline void generate_and_score_quiets(MovePicker *mp, CustomBitboardBoard board, int ply) noexcept:
+    cdef CMoveList raw_moves
+    raw_moves.count = 0
+    board._generate_quiets_c(&raw_moves)
+    
+    mp.quiets.count = 0
+    cdef int i, move, from_sq, p_type
+    for i in range(raw_moves.count):
+        move = raw_moves.moves[i]
+        mp.quiets.moves[i].move = move
+        from_sq = move & 0x3F
+        p_type = board.piece_map[from_sq]
+        if p_type != -1:
+            mp.quiets.moves[i].score = history_moves[p_type][(move >> 6) & 0x3F]
+        else:
+            mp.quiets.moves[i].score = 0
+    mp.quiets.count = raw_moves.count
+    sort_moves(&mp.quiets)
+    mp.quiets_generated = True
+
+cdef int next_move(MovePicker *mp, CustomBitboardBoard board, int ply) except *:
+    cdef int move = -1
+    cdef int i
+    cdef bint found = False
+
+    while True:
+        if mp.stage == STAGE_TT_MOVE:
+            mp.stage = STAGE_GEN_CAPTURES
+            if mp.tt_move != -1:
+                # Verify if the TT move is pseudo-legal
+                if cy_get_move_flag(mp.tt_move) == 3 or board.piece_map[cy_get_move_dest(mp.tt_move)] != -1:
+                    if not mp.captures_generated:
+                        generate_and_score_captures(mp, board)
+                    for i in range(mp.captures.count):
+                        if mp.captures.moves[i].move == mp.tt_move:
+                            found = True
+                            break
+                else:
+                    if not mp.quiets_generated:
+                        generate_and_score_quiets(mp, board, ply)
+                    for i in range(mp.quiets.count):
+                        if mp.quiets.moves[i].move == mp.tt_move:
+                            found = True
+                            break
+                if found:
+                    return mp.tt_move
+
+        elif mp.stage == STAGE_GEN_CAPTURES:
+            mp.stage = STAGE_CAPTURES
+            if not mp.captures_generated:
+                generate_and_score_captures(mp, board)
+
+        elif mp.stage == STAGE_CAPTURES:
+            if mp.capture_idx < mp.captures.count:
+                move = mp.captures.moves[mp.capture_idx].move
+                mp.capture_idx += 1
+                if move != mp.tt_move:
+                    return move
+            else:
+                mp.stage = STAGE_KILLERS
+
+        elif mp.stage == STAGE_KILLERS:
+            mp.stage = STAGE_COUNTERMOVE
+            if mp.killer_0 != -1 and mp.killer_0 != mp.tt_move:
+                if not mp.quiets_generated:
+                    generate_and_score_quiets(mp, board, ply)
+                for i in range(mp.quiets.count):
+                    if mp.quiets.moves[i].move == mp.killer_0:
+                        return mp.killer_0
+            if mp.killer_1 != -1 and mp.killer_1 != mp.tt_move:
+                if not mp.quiets_generated:
+                    generate_and_score_quiets(mp, board, ply)
+                for i in range(mp.quiets.count):
+                    if mp.quiets.moves[i].move == mp.killer_1:
+                        return mp.killer_1
+
+        elif mp.stage == STAGE_COUNTERMOVE:
+            mp.stage = STAGE_GEN_QUIETS
+            if mp.counter_move != -1 and mp.counter_move != mp.tt_move and mp.counter_move != mp.killer_0 and mp.counter_move != mp.killer_1:
+                if not mp.quiets_generated:
+                    generate_and_score_quiets(mp, board, ply)
+                for i in range(mp.quiets.count):
+                    if mp.quiets.moves[i].move == mp.counter_move:
+                        return mp.counter_move
+
+        elif mp.stage == STAGE_GEN_QUIETS:
+            mp.stage = STAGE_QUIETS
+            if not mp.quiets_generated:
+                generate_and_score_quiets(mp, board, ply)
+
+        elif mp.stage == STAGE_QUIETS:
+            if mp.quiet_idx < mp.quiets.count:
+                move = mp.quiets.moves[mp.quiet_idx].move
+                mp.quiet_idx += 1
+                if (move != mp.tt_move and 
+                    move != mp.killer_0 and 
+                    move != mp.killer_1 and 
+                    move != mp.counter_move):
+                    return move
+            else:
+                mp.stage = STAGE_DONE
+
+        elif mp.stage == STAGE_DONE:
+            return -1
+
+cdef inline void init_qmove_picker(
+    QMovePicker *qmp,
+    bint in_check,
+    int qdepth
+) noexcept nogil:
+    qmp.stage = QSTAGE_GEN_CAPTURES
+    qmp.index = 0
+    qmp.in_check = in_check
+    qmp.qdepth = qdepth
+    qmp.moves.count = 0
+
+cdef int next_qmove(QMovePicker *qmp, CustomBitboardBoard board) except *:
+    cdef int move = -1
+    cdef CMoveList raw_moves
+    cdef int i, score, to_sq, flag, is_cap
+    cdef bint gives_check
+
+    while True:
+        if qmp.stage == QSTAGE_GEN_CAPTURES:
+            qmp.stage = QSTAGE_CAPTURES
+            qmp.moves.count = 0
+            if qmp.in_check:
+                raw_moves.count = 0
+                board._generate_pseudo_legal_moves_c(&raw_moves)
+                for i in range(raw_moves.count):
+                    move = raw_moves.moves[i]
+                    score = get_mvv_lva_score(board, move)
+                    to_sq = (move >> 6) & 0x3F
+                    flag = (move >> 12) & 0x0F
+                    is_cap = flag == 3 or (board.piece_map[to_sq] != -1)
+                    if is_cap:
+                        score += 10000
+                    elif flag >= 8:
+                        score += 9000
+                    qmp.moves.moves[i].move = move
+                    qmp.moves.moves[i].score = score
+                qmp.moves.count = raw_moves.count
+                sort_moves(&qmp.moves)
+            else:
+                raw_moves.count = 0
+                board._generate_captures_c(&raw_moves)
+                for i in range(raw_moves.count):
+                    move = raw_moves.moves[i]
+                    qmp.moves.moves[i].move = move
+                    qmp.moves.moves[i].score = get_mvv_lva_score(board, move)
+                qmp.moves.count = raw_moves.count
+                sort_moves(&qmp.moves)
+
+        elif qmp.stage == QSTAGE_CAPTURES:
+            if qmp.index < qmp.moves.count:
+                move = qmp.moves.moves[qmp.index].move
+                qmp.index += 1
+                return move
+            else:
+                if not qmp.in_check and qmp.qdepth < 1:
+                    qmp.stage = QSTAGE_QUIET_CHECKS
+                    qmp.index = 0
+                    qmp.moves.count = 0
+                    
+                    raw_moves.count = 0
+                    board._generate_quiets_c(&raw_moves)
+                    for i in range(raw_moves.count):
+                        move = raw_moves.moves[i]
+                        if not board.make_move_c(move):
+                            board.unmake_move_c()
+                            continue
+                        gives_check = board.in_check()
+                        board.unmake_move_c()
+                        if gives_check:
+                            qmp.moves.moves[qmp.moves.count].move = move
+                            qmp.moves.moves[qmp.moves.count].score = 0
+                            qmp.moves.count += 1
+                else:
+                    qmp.stage = QSTAGE_DONE
+
+        elif qmp.stage == QSTAGE_QUIET_CHECKS:
+            if qmp.index < qmp.moves.count:
+                move = qmp.moves.moves[qmp.index].move
+                qmp.index += 1
+                return move
+            else:
+                qmp.stage = QSTAGE_DONE
+
+        elif qmp.stage == QSTAGE_DONE:
+            return -1
+
+def clear_tt():
+    """Clears the Transposition Table memory."""
+    memset(_tt, 0, sizeof(_tt))
+
+# --- Copy-Make State Helpers ---
+cdef void load_state_to_shell(CGameState *state, CustomBitboardBoard shell) noexcept nogil:
+    memcpy(shell._bb,       state.bitboards,    12 * sizeof(unsigned long long))
+    memcpy(shell._occ,      state.occupancies,   3 * sizeof(unsigned long long))
+    memcpy(shell.piece_map, state.piece_map,    64 * sizeof(int))
+    shell.side_to_move    = state.side_to_move
+    shell.castling_rights = state.castling_rights
+    shell.en_passant_sq   = state.en_passant_sq
+    shell.halfmove_clock  = state.halfmove_clock
+    shell.fullmove_number = state.fullmove_number
+    shell.zobrist_key     = state.zobrist_key
+    shell._history_len    = 0
+
+cdef void make_null_move_on_state(CGameState *state) noexcept nogil:
+    cdef int old_ep = state.en_passant_sq
+    state.en_passant_sq = 64
+    state.halfmove_clock += 1
+
+    # XOR out old EP file
+    if old_ep != 64:
+        state.zobrist_key ^= ZOBRIST_EP[old_ep % 8]
+
+    # Toggle side and XOR side
+    state.side_to_move = BLACK if state.side_to_move == WHITE else WHITE
+    state.zobrist_key ^= ZOBRIST_SIDE
+
+    if state.side_to_move == WHITE:
+        state.fullmove_number += 1
+
+cdef int negamax_copymake(
+    CGameState state,
+    int depth,
+    int alpha,
+    int beta,
+    int color,
+    int ply,
+    int extensions,
+    int prev_move,
+    CustomBitboardBoard shell,
+) except *:
+    info.nodes += 1
+
+    if info.nodes % 4096 == 0:
+        with nogil:
+            pass
+        if time.time() - info.start_time > info.time_limit:
+            info.stop = True
+            return 0
+
+    cdef int alpha_orig = alpha
+    cdef bint in_check
+    cdef int extended = 0
+    cdef unsigned long long key
+    cdef unsigned int idx
+    cdef TTEntry *entry
+    cdef int val, tt_move = -1, tt_val, q_flag
+    cdef bint has_non_pawn = False
+    cdef int p, R
+    cdef CGameState null_state
+    cdef CGameState child_state
+    cdef int counter_move = -1
+    cdef int prev_to, prev_piece
+    cdef MovePicker mp
+    cdef int legal_moves_searched = 0
+    cdef int r_val, r_int
+    cdef bint pv_node = (beta - alpha) > 1
+    cdef int move, from_sq, to_sq, flag, best_val = -INFINITE, best_move = -1
+    cdef bint is_cap
+    cdef int p_type
+
+    # Check check status
+    load_state_to_shell(&state, shell)
+    in_check = shell.in_check()
+
+    # Check Extensions
+    if in_check and extensions < 8:
+        depth += 1
+        extended = 1
+
+    # Transposition Table lookup (O(1) raw pointer, GIL-free)
+    key = state.zobrist_key
+    idx = key & (TT_SIZE - 1)
+    entry = &_tt[idx]
+
+    if entry.key == key:
+        if entry.depth >= depth:
+            val = entry.val
+            if val > MATE_THRESHOLD:
+                val -= ply
+            elif val < -MATE_THRESHOLD:
+                val += ply
+
+            if entry.flag == 0:  # Exact
+                return val
+            elif entry.flag == 1:  # Lower bound
+                if val > alpha:
+                    alpha = val
+            elif entry.flag == 2:  # Upper bound
+                if val < beta:
+                    beta = val
+
+            if alpha >= beta:
+                return val
+        tt_move = entry.move
+
+    # --- Null Move Pruning (NMP) ---
+    if (depth >= 3 and 
+        not in_check and 
+        ply > 0 and 
+        not info.stop):
+        
+        # Check if side to move has non-pawn material (zugzwang safety)
+        if color == 1:
+            for p in range(1, 5): # P_N=1, P_B=2, P_R=3, P_Q=4
+                if state.bitboards[p] != 0:
+                    has_non_pawn = True
+                    break
+        else:
+            for p in range(7, 11): # P_n=7, P_b=8, P_r=9, P_q=10
+                if state.bitboards[p] != 0:
+                    has_non_pawn = True
+                    break
+
+        if has_non_pawn:
+            R = 3 + depth // 4
+            null_state = state
+            make_null_move_on_state(&null_state)
+            val = -negamax_copymake(null_state, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended, -1, shell)
+            
+            if info.stop:
+                return 0
+
+            if val >= beta:
+                # Verification search for deep cuts (anti-zugzwang verification)
+                if depth >= 6:
+                    val = negamax_copymake(state, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended, prev_move, shell)
+                    if val >= beta:
+                        return val
+                else:
+                    return val
+
+    if depth <= 0:
+        # Load state into shell board and run quiescence search (fallback to Make/Unmake)
+        load_state_to_shell(&state, shell)
+        val = quiescence(shell, alpha, beta, color, ply, 0)
+        tt_val = val
+        if tt_val > MATE_THRESHOLD:
+            tt_val += ply
+        elif tt_val < -MATE_THRESHOLD:
+            tt_val -= ply
+        
+        q_flag = 0
+        if val <= alpha:
+            q_flag = 2
+        elif val >= beta:
+            q_flag = 1
+
+        entry.key = key
+        entry.depth = 0
+        entry.val = tt_val
+        entry.flag = q_flag
+        entry.move = -1
+        return val
+
+    # Resolve Countermove Heuristic
+    if prev_move != -1:
+        prev_to = (prev_move >> 6) & 0x3F
+        prev_piece = state.piece_map[prev_to]
+        if prev_piece != -1:
+            counter_move = counter_moves[prev_piece][prev_to]
+
+    # Initialize MovePicker
+    init_move_picker(&mp, tt_move, killer_moves[0][ply], killer_moves[1][ply], counter_move)
+
+    while True:
+        # Load current parent state to shell so next_move generates/queries moves correctly
+        load_state_to_shell(&state, shell)
+        move = next_move(&mp, shell, ply)
+        if move == -1:
+            break
+
+        from_sq = move & 0x3F
+        to_sq = (move >> 6) & 0x3F
+        flag = (move >> 12) & 0x0F
+        is_cap = flag == 3 or (state.piece_map[to_sq] != -1)
+
+        child_state = state
+        make_move_on_state(&child_state, move)
+        if not is_state_legal(&child_state, shell, state.side_to_move):
+            continue
+        
+        legal_moves_searched += 1
+
+        if legal_moves_searched == 1:
+            val = -negamax_copymake(child_state, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move, shell)
+        else:
+            # --- Late Move Reductions (LMR) ---
+            if (depth >= 2 and 
+                legal_moves_searched > 4 and 
+                not is_cap and 
+                flag < 8 and 
+                not in_check):
+                
+                # Lookup reduction from precomputed table
+                r_val = LMR_REDUCTIONS[depth][legal_moves_searched] if legal_moves_searched < 64 else LMR_REDUCTIONS[depth][63]
+                r_int = r_val // 1024
+
+                # Reductions tuning
+                if pv_node:
+                    r_int -= 1
+                if move == killer_moves[0][ply] or move == killer_moves[1][ply]:
+                    r_int -= 1
+                
+                p_type = child_state.piece_map[to_sq] # the piece is already moved to to_sq
+                if p_type != -1:
+                    if history_moves[p_type][to_sq] > 2000:
+                        r_int -= 1
+                    elif history_moves[p_type][to_sq] < 500:
+                        r_int += 1
+
+                if r_int < 1:
+                    r_int = 1
+                if r_int >= depth:
+                    r_int = depth - 1
+
+                # Search at reduced depth with null window
+                val = -negamax_copymake(child_state, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move, shell)
+                
+                # Re-search at full depth with null window if reduced search failed high
+                if val > alpha and r_int > 0:
+                    val = -negamax_copymake(child_state, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move, shell)
+            else:
+                # Search at full depth with null window
+                val = -negamax_copymake(child_state, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move, shell)
+            
+            # Re-search with full window if null window search failed high
+            if val > alpha and val < beta:
+                val = -negamax_copymake(child_state, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move, shell)
+
+        if info.stop:
+            return 0
+
+        if val > best_val:
+            best_val = val
+            best_move = move
+            if ply == 0:
+                info.root_best_move = move
+
+        if val > alpha:
+            alpha = val
+
+        if alpha >= beta:
+            # Beta cutoff: update Killer, History, and Countermove heuristics for quiet moves
+            if not is_cap and flag < 8:
+                if killer_moves[0][ply] != move:
+                    killer_moves[1][ply] = killer_moves[0][ply]
+                    killer_moves[0][ply] = move
+                
+                p_type = state.piece_map[from_sq]
+                if p_type != -1:
+                    history_moves[p_type][to_sq] += depth * depth
+                    if history_moves[p_type][to_sq] > 5000:
+                        history_moves[p_type][to_sq] = 5000
+
+                # Countermove update
+                if prev_move != -1:
+                    prev_to = (prev_move >> 6) & 0x3F
+                    prev_piece = state.piece_map[prev_to]
+                    if prev_piece != -1:
+                        counter_moves[prev_piece][prev_to] = move
+            break
+
+    if info.stop:
+        return 0
+
+    if legal_moves_searched == 0:
+        if in_check:
+            return -99999 + ply
+        return 0
+
+    tt_flag = 0
+    if best_val <= alpha_orig:
+        tt_flag = 2
+    elif best_val >= beta:
+        tt_flag = 1
+
+    tt_val = best_val
+    if tt_val > MATE_THRESHOLD:
+        tt_val += ply
+    elif tt_val < -MATE_THRESHOLD:
+        tt_val -= ply
+
+    if ((entry.key == 0 or entry.key == key or depth >= entry.depth) and
+        (entry.key != info.root_key or key == info.root_key)):
+        entry.key = key
+        entry.depth = depth
+        entry.val = tt_val
+        entry.flag = tt_flag
+        entry.move = best_move
+
+    return best_val
+cdef int evaluate_state(CGameState *state) noexcept nogil:
+    cdef int knights = cy_popcount(state.bitboards[1]) + cy_popcount(state.bitboards[7])
+    cdef int bishops = cy_popcount(state.bitboards[2]) + cy_popcount(state.bitboards[8])
+    cdef int rooks = cy_popcount(state.bitboards[3]) + cy_popcount(state.bitboards[9])
+    cdef int queens = cy_popcount(state.bitboards[4]) + cy_popcount(state.bitboards[10])
+    
+    cdef int phase = knights * 1 + bishops * 1 + rooks * 2 + queens * 4
+    if phase > 24:
+        phase = 24
+
+    cdef int score_mg = 0
+    cdef int score_eg = 0
+    cdef int p_idx, sq_idx
+    cdef unsigned long long bb
+    
+    # White pieces (0-5)
+    for p_idx in range(6):
+        bb = state.bitboards[p_idx]
+        while bb:
+            sq_idx = _cy_lsb_impl2(bb)
+            bb = bb & ~(<unsigned long long>1 << sq_idx)
+            score_mg += white_piece_values_mg[p_idx][sq_idx]
+            score_eg += white_piece_values_eg[p_idx][sq_idx]
+
+    # Black pieces (6-11)
+    for p_idx in range(6):
+        bb = state.bitboards[p_idx + 6]
+        while bb:
+            sq_idx = _cy_lsb_impl2(bb)
+            bb = bb & ~(<unsigned long long>1 << sq_idx)
+            score_mg -= black_piece_values_mg[p_idx][sq_idx]
+            score_eg -= black_piece_values_eg[p_idx][sq_idx]
+
+    return <int>((score_mg * phase + score_eg * (24 - phase)) / 24)
+
+cdef void make_move_on_state(CGameState *state, int move) noexcept nogil:
+    cdef int from_sq = move & 0x3F
+    cdef int to_sq   = (move >> 6) & 0x3F
+    cdef int flag    = (move >> 12) & 0x0F
+    cdef int side    = state.side_to_move
+    cdef int opp_side = 1 if side == 0 else 0
+
+    cdef int mp = state.piece_map[from_sq]
+    if mp == -1:
+        return
+
+    # XOR out the moving piece from the source square
+    state.zobrist_key ^= ZOBRIST_PIECES[mp][from_sq]
+    state.bitboards[mp] = state.bitboards[mp] & ~(<unsigned long long>1 << from_sq)
+    state.piece_map[from_sq] = -1
+
+    cdef int cap = state.piece_map[to_sq]
+
+    cdef int old_ep = state.en_passant_sq
+    cdef int old_castle = state.castling_rights
+
+    state.en_passant_sq = 64
+    state.halfmove_clock += 1
+    if side == BLACK:
+        state.fullmove_number += 1
+
+    if cap != -1:
+        state.zobrist_key ^= ZOBRIST_PIECES[cap][to_sq]
+        state.bitboards[cap] = state.bitboards[cap] & ~(<unsigned long long>1 << to_sq)
+        state.piece_map[to_sq] = -1
+        state.halfmove_clock = 0
+
+    cdef int cap_ep_sq, ep_pawn_idx, prom_offset, p_prom
+
+    if flag == 1:  # FLAG_DOUBLE_PUSH = 1
+        state.en_passant_sq = from_sq + 8 if side == WHITE else from_sq - 8
+        state.halfmove_clock = 0
+    elif flag == 3:  # FLAG_EP = 3
+        cap_ep_sq   = to_sq - 8 if side == WHITE else to_sq + 8
+        ep_pawn_idx = 6 if side == WHITE else 0 # P_p=6, P_P=0
+        state.zobrist_key ^= ZOBRIST_PIECES[ep_pawn_idx][cap_ep_sq]
+        state.bitboards[ep_pawn_idx] = state.bitboards[ep_pawn_idx] & ~(<unsigned long long>1 << cap_ep_sq)
+        state.piece_map[cap_ep_sq] = -1
+        state.halfmove_clock = 0
+    elif flag == 2:  # FLAG_CASTLE = 2
+        if to_sq == 6: # G1 = 6
+            state.zobrist_key ^= ZOBRIST_PIECES[3][7] ^ ZOBRIST_PIECES[3][5] # P_R=3, H1=7, F1=5
+            state.bitboards[3] = state.bitboards[3] & ~(<unsigned long long>1 << 7)
+            state.bitboards[3] = state.bitboards[3] | (<unsigned long long>1 << 5)
+            state.piece_map[7] = -1; state.piece_map[5] = 3
+        elif to_sq == 2: # C1 = 2
+            state.zobrist_key ^= ZOBRIST_PIECES[3][0] ^ ZOBRIST_PIECES[3][3] # P_R=3, A1=0, D1=3
+            state.bitboards[3] = state.bitboards[3] & ~(<unsigned long long>1 << 0)
+            state.bitboards[3] = state.bitboards[3] | (<unsigned long long>1 << 3)
+            state.piece_map[0] = -1; state.piece_map[3] = 3
+        elif to_sq == 62: # G8 = 62
+            state.zobrist_key ^= ZOBRIST_PIECES[9][63] ^ ZOBRIST_PIECES[9][61] # P_r=9, H8=63, F8=61
+            state.bitboards[9] = state.bitboards[9] & ~(<unsigned long long>1 << 63)
+            state.bitboards[9] = state.bitboards[9] | (<unsigned long long>1 << 61)
+            state.piece_map[63] = -1; state.piece_map[61] = 9
+        elif to_sq == 58: # C8 = 58
+            state.zobrist_key ^= ZOBRIST_PIECES[9][56] ^ ZOBRIST_PIECES[9][59] # P_r=9, A8=56, D8=59
+            state.bitboards[9] = state.bitboards[9] & ~(<unsigned long long>1 << 56)
+            state.bitboards[9] = state.bitboards[9] | (<unsigned long long>1 << 59)
+            state.piece_map[56] = -1; state.piece_map[59] = 9
+
+    # Place piece at destination (with promotion)
+    if flag >= 8:  # FLAG_PROMOTE_N = 8
+        prom_offset = 0 if side == WHITE else 6
+        if   flag == 11: p_prom = 4 + prom_offset # P_Q = 4
+        elif flag == 10: p_prom = 3 + prom_offset # P_R = 3
+        elif flag == 9:  p_prom = 2 + prom_offset # P_B = 2
+        else:            p_prom = 1 + prom_offset # P_N = 1
+        state.zobrist_key ^= ZOBRIST_PIECES[p_prom][to_sq]
+        state.bitboards[p_prom] = state.bitboards[p_prom] | (<unsigned long long>1 << to_sq)
+        state.piece_map[to_sq] = p_prom
+        state.halfmove_clock = 0
+    else:
+        state.zobrist_key ^= ZOBRIST_PIECES[mp][to_sq]
+        state.bitboards[mp] = state.bitboards[mp] | (<unsigned long long>1 << to_sq)
+        state.piece_map[to_sq] = mp
+        if mp == 0 or mp == 6: # P_P=0, P_p=6
+            state.halfmove_clock = 0
+
+    # Update castling rights
+    if   mp == 5:      state.castling_rights &= ~(1 | 2) # P_K=5, WK=1, WQ=2
+    elif mp == 11:     state.castling_rights &= ~(4 | 8) # P_k=11, BK=4, BQ=8
+    if   from_sq == 7:  state.castling_rights &= ~1
+    elif from_sq == 0:  state.castling_rights &= ~2
+    elif from_sq == 63: state.castling_rights &= ~4
+    elif from_sq == 56: state.castling_rights &= ~8
+    if   to_sq == 7:    state.castling_rights &= ~1
+    elif to_sq == 0:    state.castling_rights &= ~2
+    elif to_sq == 63:   state.castling_rights &= ~4
+    elif to_sq == 56:   state.castling_rights &= ~8
+
+    # Incremental occupancy update
+    state.occupancies[side] = state.occupancies[side] & ~(<unsigned long long>1 << from_sq)
+    if cap != -1:
+        state.occupancies[opp_side] = state.occupancies[opp_side] & ~(<unsigned long long>1 << to_sq)
+    if flag == 3:  # FLAG_EP = 3
+        cap_ep_sq = to_sq - 8 if side == WHITE else to_sq + 8
+        state.occupancies[opp_side] = state.occupancies[opp_side] & ~(<unsigned long long>1 << cap_ep_sq)
+    elif flag == 2:  # FLAG_CASTLE = 2
+        if to_sq == 6: # G1 = 6
+            state.occupancies[0] = state.occupancies[0] & ~(<unsigned long long>1 << 7)
+            state.occupancies[0] = state.occupancies[0] | (<unsigned long long>1 << 5)
+        elif to_sq == 2: # C1 = 2
+            state.occupancies[0] = state.occupancies[0] & ~(<unsigned long long>1 << 0)
+            state.occupancies[0] = state.occupancies[0] | (<unsigned long long>1 << 3)
+        elif to_sq == 62: # G8 = 62
+            state.occupancies[1] = state.occupancies[1] & ~(<unsigned long long>1 << 63)
+            state.occupancies[1] = state.occupancies[1] | (<unsigned long long>1 << 61)
+        elif to_sq == 58: # C8 = 58
+            state.occupancies[1] = state.occupancies[1] & ~(<unsigned long long>1 << 56)
+            state.occupancies[1] = state.occupancies[1] | (<unsigned long long>1 << 59)
+
+    state.occupancies[side] = state.occupancies[side] | (<unsigned long long>1 << to_sq)
+    state.occupancies[2]    = state.occupancies[0] | state.occupancies[1]
+
+    # Toggle side
+    state.side_to_move = opp_side
+
+    # XOR castling/EP/side zobrist updates
+    if old_castle != state.castling_rights:
+        state.zobrist_key ^= ZOBRIST_CASTLING[old_castle] ^ ZOBRIST_CASTLING[state.castling_rights]
+    if old_ep != 64:
+        state.zobrist_key ^= ZOBRIST_EP[old_ep % 8]
+    if state.en_passant_sq != 64:
+        state.zobrist_key ^= ZOBRIST_EP[state.en_passant_sq % 8]
+    state.zobrist_key ^= ZOBRIST_SIDE
+
+cdef bint is_state_legal(CGameState *state, CustomBitboardBoard shell, int side_that_moved) noexcept:
+    cdef int king_piece_idx = 5 if side_that_moved == WHITE else 11
+    cdef unsigned long long king_bb = state.bitboards[king_piece_idx]
+    cdef int king_sq = cy_lsb(king_bb)
+    if king_sq == -1:
+        return True
+    
+    # Load state into shell board to check attacks
+    memcpy(shell._bb,       state.bitboards,    12 * sizeof(unsigned long long))
+    memcpy(shell._occ,      state.occupancies,   3 * sizeof(unsigned long long))
+    memcpy(shell.piece_map, state.piece_map,    64 * sizeof(int))
+    shell.side_to_move    = state.side_to_move
+    shell.castling_rights = state.castling_rights
+    shell.en_passant_sq   = state.en_passant_sq
+    
+    cdef int opponent = BLACK if side_that_moved == WHITE else WHITE
+    return not shell.is_square_attacked(king_sq, opponent)
 
 def clear_tt():
     """Clears the Transposition Table memory."""
@@ -362,6 +1123,7 @@ cdef int quiescence(
     int beta,
     int color,
     int ply,
+    int qdepth = 0,
 ) except *:
     info.nodes += 1
 
@@ -374,64 +1136,22 @@ cdef int quiescence(
         if stand_pat > alpha:
             alpha = stand_pat
 
-    cdef CMoveList pseudo_moves
-    pseudo_moves.count = 0
-    board._generate_pseudo_legal_moves_c(&pseudo_moves)
+    cdef QMovePicker qmp
+    init_qmove_picker(&qmp, in_check, qdepth)
 
-    cdef CScoredMoveList moves_to_search
-    moves_to_search.count = 0
-
-    cdef int i, move, to_sq, flag, score, val, qdepth
-    cdef bint is_cap, gives_check
+    cdef int move, val
     cdef int legal_moves_searched = 0
 
-    if in_check:
-        for i in range(pseudo_moves.count):
-            move = pseudo_moves.moves[i]
-            score = get_mvv_lva_score(board, move)
-            to_sq = (move >> 6) & 0x3F
-            flag = (move >> 12) & 0x0F
-            is_cap = flag == 3 or (board.piece_map[to_sq] != -1)
-            if is_cap:
-                score += 10000
-            elif flag >= 8:
-                score += 9000
-            moves_to_search.moves[moves_to_search.count].move = move
-            moves_to_search.moves[moves_to_search.count].score = score
-            moves_to_search.count += 1
-    else:
-        qdepth = ply - info.current_depth
-        for i in range(pseudo_moves.count):
-            move = pseudo_moves.moves[i]
-            to_sq = (move >> 6) & 0x3F
-            flag = (move >> 12) & 0x0F
-            is_cap = flag == 3 or (board.piece_map[to_sq] != -1)
+    while True:
+        move = next_qmove(&qmp, board)
+        if move == -1:
+            break
 
-            if is_cap:
-                score = get_mvv_lva_score(board, move)
-                moves_to_search.moves[moves_to_search.count].move = move
-                moves_to_search.moves[moves_to_search.count].score = score
-                moves_to_search.count += 1
-            elif qdepth < 1:
-                if not board.make_move_c(move):
-                    board.unmake_move_c()
-                    continue
-                gives_check = board.in_check()
-                board.unmake_move_c()
-                if gives_check:
-                    moves_to_search.moves[moves_to_search.count].move = move
-                    moves_to_search.moves[moves_to_search.count].score = 0
-                    moves_to_search.count += 1
-
-    sort_moves(&moves_to_search)
-
-    for i in range(moves_to_search.count):
-        move = moves_to_search.moves[i].move
         if not board.make_move_c(move):
             board.unmake_move_c()
             continue
         legal_moves_searched += 1
-        val = -quiescence(board, -beta, -alpha, -color, ply + 1)
+        val = -quiescence(board, -beta, -alpha, -color, ply + 1, qdepth + 1)
         board.unmake_move_c()
 
         if val >= beta:
@@ -453,6 +1173,7 @@ cdef int negamax(
     int color,
     int ply,
     int extensions = 0,
+    int prev_move = -1,
 ) except *:
     info.nodes += 1
 
@@ -488,16 +1209,13 @@ cdef int negamax(
 
             if entry.flag == 0:  # Exact
                 return val
-            if entry.flag == 1:  # Lower bound
-                if val >= beta:
-                    return val
+            elif entry.flag == 1:  # Lower bound
                 if val > alpha:
                     alpha = val
-            if entry.flag == 2:  # Upper bound
-                if val <= alpha:
-                    return val
+            elif entry.flag == 2:  # Upper bound
                 if val < beta:
                     beta = val
+
             if alpha >= beta:
                 return val
         tt_move = entry.move
@@ -525,7 +1243,7 @@ cdef int negamax(
         if has_non_pawn:
             R = 3 + depth // 4
             if board.make_null_move():
-                val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended)
+                val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended, -1)
                 board.unmake_move_c()
                 
                 if info.stop:
@@ -534,14 +1252,14 @@ cdef int negamax(
                 if val >= beta:
                     # Verification search for deep cuts (anti-zugzwang verification)
                     if depth >= 6:
-                        val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended)
+                        val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended, prev_move)
                         if val >= beta:
                             return val
                     else:
                         return val
 
     if depth <= 0:
-        val = quiescence(board, alpha, beta, color, ply)
+        val = quiescence(board, alpha, beta, color, ply, 0)
         tt_val = val
         if tt_val > MATE_THRESHOLD:
             tt_val += ply
@@ -561,55 +1279,32 @@ cdef int negamax(
         entry.move = -1
         return val
 
-    cdef CMoveList pseudo_moves
-    pseudo_moves.count = 0
-    board._generate_pseudo_legal_moves_c(&pseudo_moves)
+    # Resolve Countermove Heuristic
+    cdef int counter_move = -1
+    cdef int prev_to, prev_piece
+    if prev_move != -1:
+        prev_to = (prev_move >> 6) & 0x3F
+        prev_piece = board.piece_map[prev_to]
+        if prev_piece != -1:
+            counter_move = counter_moves[prev_piece][prev_to]
 
-    # Move Ordering
-    cdef CScoredMoveList moves_scored
-    moves_scored.count = 0
-    
-    cdef int i, move, from_sq, to_sq, flag, score, best_val = -INFINITE, best_move = -1
-    cdef bint is_cap
-    cdef int p_type
-
-    for i in range(pseudo_moves.count):
-        move = pseudo_moves.moves[i]
-        if move == tt_move:
-            score = 1000000
-        else:
-            from_sq = move & 0x3F
-            to_sq = (move >> 6) & 0x3F
-            flag = (move >> 12) & 0x0F
-            is_cap = flag == 3 or (board.piece_map[to_sq] != -1)
-            
-            if is_cap:
-                score = 100000 + get_mvv_lva_score(board, move)
-            elif flag >= 8:
-                score = 90000 + PIECE_VALUES[0]
-            else:
-                if move == killer_moves[0][ply]:
-                    score = 9000
-                elif move == killer_moves[1][ply]:
-                    score = 8000
-                else:
-                    p_type = board.piece_map[from_sq]
-                    if p_type != -1:
-                        score = history_moves[p_type][to_sq]
-                    else:
-                        score = 0
-        moves_scored.moves[moves_scored.count].move = move
-        moves_scored.moves[moves_scored.count].score = score
-        moves_scored.count += 1
-
-    sort_moves(&moves_scored)
+    # Initialize MovePicker
+    cdef MovePicker mp
+    init_move_picker(&mp, tt_move, killer_moves[0][ply], killer_moves[1][ply], counter_move)
 
     cdef int legal_moves_searched = 0
     cdef int r_val, r_int
     cdef bint pv_node = (beta - alpha) > 1
 
-    for i in range(moves_scored.count):
-        move = moves_scored.moves[i].move
+    cdef int move, from_sq, to_sq, flag, best_val = -INFINITE, best_move = -1
+    cdef bint is_cap
+    cdef int p_type
+
+    while True:
+        move = next_move(&mp, board, ply)
+        if move == -1:
+            break
+
         from_sq = move & 0x3F
         to_sq = (move >> 6) & 0x3F
         flag = (move >> 12) & 0x0F
@@ -622,7 +1317,7 @@ cdef int negamax(
         legal_moves_searched += 1
 
         if legal_moves_searched == 1:
-            val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)
+            val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move)
         else:
             # --- Late Move Reductions (LMR) ---
             if (depth >= 2 and 
@@ -654,18 +1349,18 @@ cdef int negamax(
                     r_int = depth - 1
 
                 # Search at reduced depth with null window
-                val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)
+                val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move)
                 
                 # Re-search at full depth with null window if reduced search failed high
                 if val > alpha and r_int > 0:
-                    val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)
+                    val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move)
             else:
                 # Search at full depth with null window
-                val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)
+                val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move)
             
             # Re-search with full window if null window search failed high
             if val > alpha and val < beta:
-                val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)
+                val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move)
         
         board.unmake_move_c()
 
@@ -682,7 +1377,7 @@ cdef int negamax(
             alpha = val
 
         if alpha >= beta:
-            # Beta cutoff: update Killer & History heuristics for quiet moves
+            # Beta cutoff: update Killer, History, and Countermove heuristics for quiet moves
             if not is_cap and flag < 8:
                 if killer_moves[0][ply] != move:
                     killer_moves[1][ply] = killer_moves[0][ply]
@@ -693,6 +1388,13 @@ cdef int negamax(
                     history_moves[p_type][to_sq] += depth * depth
                     if history_moves[p_type][to_sq] > 5000:
                         history_moves[p_type][to_sq] = 5000
+
+                # Countermove update
+                if prev_move != -1:
+                    prev_to = (prev_move >> 6) & 0x3F
+                    prev_piece = board.piece_map[prev_to]
+                    if prev_piece != -1:
+                        counter_moves[prev_piece][prev_to] = move
             break
 
     if info.stop:
@@ -715,7 +1417,8 @@ cdef int negamax(
     elif tt_val < -MATE_THRESHOLD:
         tt_val -= ply
 
-    if key == info.root_key or entry.key != info.root_key:
+    if ((entry.key == 0 or entry.key == key or depth >= entry.depth) and
+        (entry.key != info.root_key or key == info.root_key)):
         entry.key = key
         entry.depth = depth
         entry.val = tt_val
@@ -730,6 +1433,7 @@ def get_best_move_cy(
     double time_limit = 1.0,
     int depth_limit = 0,
     bint print_info = False,
+    int search_mode = 1,
 ) -> object:
     """Finds the best move using iterative deepening search (Cython compiled)."""
     global info
@@ -742,6 +1446,7 @@ def get_best_move_cy(
 
     memset(killer_moves, 0, sizeof(killer_moves))
     memset(history_moves, 0, sizeof(history_moves))
+    memset(counter_moves, 0, sizeof(counter_moves))
 
     cdef CMoveList legal_moves
     legal_moves.count = 0
@@ -755,8 +1460,20 @@ def get_best_move_cy(
     cdef int best_move_so_far = legal_moves.moves[0]
     cdef int color = 1 if board.side_to_move == WHITE else -1
 
+    # Populate root state for copy-make
+    cdef CGameState root_state
+    memcpy(root_state.bitboards,    board._bb,       12 * sizeof(unsigned long long))
+    memcpy(root_state.occupancies,  board._occ,       3 * sizeof(unsigned long long))
+    memcpy(root_state.piece_map,    board.piece_map, 64 * sizeof(int))
+    root_state.side_to_move    = board.side_to_move
+    root_state.castling_rights = board.castling_rights
+    root_state.en_passant_sq   = board.en_passant_sq
+    root_state.halfmove_clock  = board.halfmove_clock
+    root_state.fullmove_number = board.fullmove_number
+    root_state.zobrist_key     = board.zobrist_key
+
     cdef int depth = 1
-    cdef unsigned long long key
+    cdef unsigned long long key = board.zobrist_key
     cdef unsigned int idx
     cdef TTEntry *entry
     cdef int score
@@ -770,8 +1487,10 @@ def get_best_move_cy(
 
         info.current_depth = depth
         if depth < 5:
-            negamax(board, depth, -INFINITE, INFINITE, color, 0)
-            key = board.zobrist_key
+            if search_mode == 1:
+                negamax_copymake(root_state, depth, -INFINITE, INFINITE, color, 0, 0, -1, board)
+            else:
+                negamax(board, depth, -INFINITE, INFINITE, color, 0)
             idx = key & (TT_SIZE - 1)
             entry = &_tt[idx]
             if entry.key == key:
@@ -784,12 +1503,14 @@ def get_best_move_cy(
                 if alpha_aw < -INFINITE: alpha_aw = -INFINITE
                 if beta_aw > INFINITE: beta_aw = INFINITE
                 
-                score = negamax(board, depth, alpha_aw, beta_aw, color, 0)
+                if search_mode == 1:
+                    score = negamax_copymake(root_state, depth, alpha_aw, beta_aw, color, 0, 0, -1, board)
+                else:
+                    score = negamax(board, depth, alpha_aw, beta_aw, color, 0)
                 
                 if info.stop:
                     break
                 
-                key = board.zobrist_key
                 idx = key & (TT_SIZE - 1)
                 entry = &_tt[idx]
                 if entry.key == key:
@@ -801,10 +1522,12 @@ def get_best_move_cy(
                     beta_aw = alpha_aw
                     delta += delta // 3 + 5
                     alpha_aw = last_score - delta
+                    if alpha_aw < -INFINITE: alpha_aw = -INFINITE
                 elif last_score >= beta_aw:
                     alpha_aw = beta_aw
                     delta += delta // 3 + 5
                     beta_aw = last_score + delta
+                    if beta_aw > INFINITE: beta_aw = INFINITE
                 else:
                     break
 
@@ -879,3 +1602,120 @@ def get_time_limit():
 def set_time_limit(double val):
     global info
     info.time_limit = val
+
+def generate_legal_moves_copymake(CustomBitboardBoard board):
+    """Generates legal moves using Copy-Make style validation."""
+    cdef CGameState root_state
+    memcpy(root_state.bitboards,    board._bb,       12 * sizeof(unsigned long long))
+    memcpy(root_state.occupancies,  board._occ,       3 * sizeof(unsigned long long))
+    memcpy(root_state.piece_map,    board.piece_map, 64 * sizeof(int))
+    root_state.side_to_move    = board.side_to_move
+    root_state.castling_rights = board.castling_rights
+    root_state.en_passant_sq   = board.en_passant_sq
+    root_state.halfmove_clock  = board.halfmove_clock
+    root_state.fullmove_number = board.fullmove_number
+    root_state.zobrist_key     = board.zobrist_key
+
+    cdef CMoveList pseudo
+    pseudo.count = 0
+    board._generate_pseudo_legal_moves_c(&pseudo)
+
+    cdef list legal_moves = []
+    cdef int i, move
+    cdef CGameState child_state
+
+    for i in range(pseudo.count):
+        move = pseudo.moves[i]
+        child_state = root_state
+        make_move_on_state(&child_state, move)
+        if is_state_legal(&child_state, board, root_state.side_to_move):
+            legal_moves.append(move)
+
+    # Restore board to original state before returning
+    load_state_to_shell(&root_state, board)
+    return legal_moves
+
+cdef long long run_perft_copymake_recursive(CGameState state, int depth, CustomBitboardBoard shell) except *:
+    if depth == 0:
+        return 1
+
+    cdef CMoveList pseudo
+    pseudo.count = 0
+    load_state_to_shell(&state, shell)
+    shell._generate_pseudo_legal_moves_c(&pseudo)
+
+    cdef int i, move
+    cdef long long nodes = 0
+    cdef CGameState child_state
+
+    if depth == 1:
+        for i in range(pseudo.count):
+            move = pseudo.moves[i]
+            child_state = state
+            make_move_on_state(&child_state, move)
+            if is_state_legal(&child_state, shell, state.side_to_move):
+                nodes += 1
+        return nodes
+
+    for i in range(pseudo.count):
+        move = pseudo.moves[i]
+        child_state = state
+        make_move_on_state(&child_state, move)
+        if is_state_legal(&child_state, shell, state.side_to_move):
+            nodes += run_perft_copymake_recursive(child_state, depth - 1, shell)
+
+    return nodes
+
+def run_perft_copymake(CustomBitboardBoard board, int depth):
+    cdef CGameState root_state
+    memcpy(root_state.bitboards,    board._bb,       12 * sizeof(unsigned long long))
+    memcpy(root_state.occupancies,  board._occ,       3 * sizeof(unsigned long long))
+    memcpy(root_state.piece_map,    board.piece_map, 64 * sizeof(int))
+    root_state.side_to_move    = board.side_to_move
+    root_state.castling_rights = board.castling_rights
+    root_state.en_passant_sq   = board.en_passant_sq
+    root_state.halfmove_clock  = board.halfmove_clock
+    root_state.fullmove_number = board.fullmove_number
+    root_state.zobrist_key     = board.zobrist_key
+
+    cdef long long total_nodes = run_perft_copymake_recursive(root_state, depth, board)
+
+    # Restore board
+    load_state_to_shell(&root_state, board)
+    return total_nodes
+
+def run_perft_copymake_divide(CustomBitboardBoard board, int depth):
+    cdef CGameState root_state
+    memcpy(root_state.bitboards,    board._bb,       12 * sizeof(unsigned long long))
+    memcpy(root_state.occupancies,  board._occ,       3 * sizeof(unsigned long long))
+    memcpy(root_state.piece_map,    board.piece_map, 64 * sizeof(int))
+    root_state.side_to_move    = board.side_to_move
+    root_state.castling_rights = board.castling_rights
+    root_state.en_passant_sq   = board.en_passant_sq
+    root_state.halfmove_clock  = board.halfmove_clock
+    root_state.fullmove_number = board.fullmove_number
+    root_state.zobrist_key     = board.zobrist_key
+
+    cdef CMoveList pseudo
+    pseudo.count = 0
+    board._generate_pseudo_legal_moves_c(&pseudo)
+
+    cdef dict result = {}
+    cdef int i, move
+    cdef CGameState child_state
+    cdef long long nodes
+
+    for i in range(pseudo.count):
+        move = pseudo.moves[i]
+        child_state = root_state
+        make_move_on_state(&child_state, move)
+        if is_state_legal(&child_state, board, root_state.side_to_move):
+            if depth > 1:
+                nodes = run_perft_copymake_recursive(child_state, depth - 1, board)
+            else:
+                nodes = 1
+            result[move] = nodes
+
+    # Restore board
+    load_state_to_shell(&root_state, board)
+    return result
