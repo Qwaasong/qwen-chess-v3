@@ -257,17 +257,12 @@ LMR_REDUCTIONS = [[0] * 64 for _ in range(64)]
 
 def init_lmr_reductions():
     import math
-    reductions_1d = [0] * 64
-    for i in range(1, 64):
-        reductions_1d[i] = int(757 * math.log(i) / 128.0)
     for depth in range(64):
         for move_count in range(64):
             if depth == 0 or move_count == 0:
                 LMR_REDUCTIONS[depth][move_count] = 0
             else:
-                r = reductions_1d[depth] * reductions_1d[move_count]
-                reduction_depth = (r + 511) // 1024 + (1 if r > 1007 else 0)
-                LMR_REDUCTIONS[depth][move_count] = reduction_depth * 1024
+                LMR_REDUCTIONS[depth][move_count] = int(0.5 + math.log(depth) * math.log(move_count) / 1.95 * 1024)
 
 init_lmr_reductions()
 
@@ -671,12 +666,10 @@ def negamax(
 
     # --- Null Move Pruning (NMP) ---
     has_non_pawn = False
-    static_eval = color * evaluate(board)
     if (depth >= 3 and 
         not in_check and 
         ply > 0 and 
-        not info.stop and
-        static_eval >= beta - 32 * depth + 292):
+        not info.stop):
         
         # Check if side to move has non-pawn material (zugzwang safety)
         if color == 1:
@@ -691,10 +684,7 @@ def negamax(
                     break
 
         if has_non_pawn:
-            # Dynamic reduction R matching Stockfish 11
-            R = (854 + 68 * depth) // 258 + min(int((static_eval - beta) / 192), 3)
-            R = max(1, min(depth - 1, R))
-            
+            R = 3 + depth // 4
             if board.make_null_move():
                 val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended, -1)
                 board.unmake_move()
@@ -924,45 +914,11 @@ def get_best_move(
     color = 1 if board.side_to_move == WHITE else -1
 
     depth = 1
-    last_score = 0
     while not info.stop:
         if depth_limit > 0 and depth > depth_limit:
             break
         info.current_depth = depth
-        if depth < 5:
-            negamax(board, depth, -INFINITE, INFINITE, color, 0, 0, -1)
-            key_tuple = board.zobrist_key
-            if key_tuple in tt:
-                last_score = tt[key_tuple]['val']
-        else:
-            delta = 21 + abs(last_score) // 256
-            alpha_aw = last_score - delta
-            beta_aw = last_score + delta
-            while not info.stop:
-                if alpha_aw < -INFINITE: alpha_aw = -INFINITE
-                if beta_aw > INFINITE: beta_aw = INFINITE
-                
-                score = negamax(board, depth, alpha_aw, beta_aw, color, 0, 0, -1)
-                
-                if info.stop:
-                    break
-                
-                key_tuple = board.zobrist_key
-                if key_tuple in tt:
-                    last_score = tt[key_tuple]['val']
-                else:
-                    last_score = score
-                
-                if last_score <= alpha_aw:
-                    beta_aw = alpha_aw
-                    delta += delta // 4 + 5
-                    alpha_aw = last_score - delta
-                elif last_score >= beta_aw:
-                    alpha_aw = beta_aw
-                    delta += delta // 4 + 5
-                    beta_aw = last_score + delta
-                else:
-                    break
+        negamax(board, depth, -INFINITE, INFINITE, color, 0, 0, -1)
 
         if info.stop:
             break

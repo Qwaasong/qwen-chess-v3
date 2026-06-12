@@ -24,7 +24,7 @@ from itertools import combinations
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 ENGINES = {
-    "Baseline": BASE_DIR,                           # Root combined engine (main branch)
+    "Baseline": os.path.join(BASE_DIR, "baseline"), # Saved baseline engine
     "Agent-A":  os.path.join(BASE_DIR, "agent_a_spsa"),
     "Agent-B":  os.path.join(BASE_DIR, "agent_b_timemgmt"),
     "Agent-C":  os.path.join(BASE_DIR, "agent_c_qsearch"),

@@ -1878,22 +1878,22 @@ cdef void cy_evaluate_pawns(CustomBitboardBoard board, int *mg_score, int *eg_sc
 
     cdef int passed_pawn_mg[8]
     passed_pawn_mg[0] = 0
-    passed_pawn_mg[1] = 10
-    passed_pawn_mg[2] = 17
-    passed_pawn_mg[3] = 15
-    passed_pawn_mg[4] = 62
-    passed_pawn_mg[5] = 168
-    passed_pawn_mg[6] = 276
+    passed_pawn_mg[1] = 0
+    passed_pawn_mg[2] = 5
+    passed_pawn_mg[3] = 10
+    passed_pawn_mg[4] = 20
+    passed_pawn_mg[5] = 40
+    passed_pawn_mg[6] = 80
     passed_pawn_mg[7] = 0
 
     cdef int passed_pawn_eg[8]
     passed_pawn_eg[0] = 0
-    passed_pawn_eg[1] = 28
-    passed_pawn_eg[2] = 33
-    passed_pawn_eg[3] = 41
-    passed_pawn_eg[4] = 72
-    passed_pawn_eg[5] = 177
-    passed_pawn_eg[6] = 260
+    passed_pawn_eg[1] = 0
+    passed_pawn_eg[2] = 10
+    passed_pawn_eg[3] = 20
+    passed_pawn_eg[4] = 40
+    passed_pawn_eg[5] = 80
+    passed_pawn_eg[6] = 160
     passed_pawn_eg[7] = 0
 
     cdef unsigned long long w_pawns = board._bb[P_P]

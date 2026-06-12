@@ -380,19 +380,13 @@ cdef int counter_moves[12][64]
 cdef int LMR_REDUCTIONS[64][64]
 
 cdef void init_lmr_reductions() noexcept:
-    cdef int depth, move_count, i, r, reduction_depth
-    cdef int reductions_1d[64]
-    reductions_1d[0] = 0
-    for i in range(1, 64):
-        reductions_1d[i] = <int>(757 * log(i) / 128.0)
+    cdef int depth, move_count
     for depth in range(64):
         for move_count in range(64):
             if depth == 0 or move_count == 0:
                 LMR_REDUCTIONS[depth][move_count] = 0
             else:
-                r = reductions_1d[depth] * reductions_1d[move_count]
-                reduction_depth = (r + 511) // 1024 + (1 if r > 1007 else 0)
-                LMR_REDUCTIONS[depth][move_count] = reduction_depth * 1024
+                LMR_REDUCTIONS[depth][move_count] = <int>(0.5 + log(depth) * log(move_count) / 1.95 * 1024)
 
 cdef bint has_sufficient_material_bb(unsigned long long *bitboards) noexcept nogil:
     cdef int w_knights, b_knights, w_bishops, b_bishops, total_pieces, w_sq, b_sq
@@ -851,7 +845,7 @@ cdef int negamax_copymake(
     cdef int legal_moves_searched = 0
     cdef int r_val, r_int
     cdef bint pv_node = (beta - alpha) > 1
-    cdef int move, from_sq, to_sq, flag, best_val = -INFINITE, best_move = -1, static_eval
+    cdef int move, from_sq, to_sq, flag, best_val = -INFINITE, best_move = -1
     cdef bint is_cap
     cdef int p_type
 
@@ -891,12 +885,10 @@ cdef int negamax_copymake(
         tt_move = entry.move
 
     # --- Null Move Pruning (NMP) ---
-    static_eval = color * evaluate_state(state)
     if (depth >= 3 and 
         not in_check and 
         ply > 0 and 
-        not info.stop and
-        static_eval >= beta - 32 * depth + 292):
+        not info.stop):
         
         # Check if side to move has non-pawn material (zugzwang safety)
         if color == 1:
@@ -911,12 +903,7 @@ cdef int negamax_copymake(
                     break
 
         if has_non_pawn:
-            # Dynamic reduction R matching Stockfish 11
-            R = (854 + 68 * depth) / 258 + ((static_eval - beta) / 192 if (static_eval - beta) / 192 < 3 else 3)
-            if R < 1:
-                R = 1
-            elif R >= depth:
-                R = depth - 1
+            R = 3 + depth // 4
             null_state = state[0]
             make_null_move_on_state(&null_state)
             val = -negamax_copymake(&null_state, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended, -1, shell, search_history, root_history_len)
@@ -1440,12 +1427,10 @@ cdef int negamax(
     # --- Null Move Pruning (NMP) ---
     cdef bint has_non_pawn = False
     cdef int p, R
-    cdef int static_eval = color * evaluate(board)
     if (depth >= 3 and 
         not in_check and 
         ply > 0 and 
-        not info.stop and
-        static_eval >= beta - 32 * depth + 292):
+        not info.stop):
         
         # Check if side to move has non-pawn material (zugzwang safety)
         if color == 1:
@@ -1460,12 +1445,7 @@ cdef int negamax(
                     break
 
         if has_non_pawn:
-            # Dynamic reduction R matching Stockfish 11
-            R = (854 + 68 * depth) / 258 + ((static_eval - beta) / 192 if (static_eval - beta) / 192 < 3 else 3)
-            if R < 1:
-                R = 1
-            elif R >= depth:
-                R = depth - 1
+            R = 3 + depth // 4
             if board.make_null_move_c():
                 val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended, -1, search_history, root_history_len)
                 board.unmake_move_c()
@@ -1740,7 +1720,7 @@ def get_best_move_cy(
             if entry.key == key:
                 last_score = entry.val
         else:
-            delta = 21 + abs(last_score) // 256
+            delta = 15
             alpha_aw = last_score - delta
             beta_aw = last_score + delta
             while not info.stop:
@@ -1765,12 +1745,12 @@ def get_best_move_cy(
                 
                 if last_score <= alpha_aw:
                     beta_aw = alpha_aw
-                    delta += delta // 4 + 5
+                    delta += delta // 3 + 5
                     alpha_aw = last_score - delta
                     if alpha_aw < -INFINITE: alpha_aw = -INFINITE
                 elif last_score >= beta_aw:
                     alpha_aw = beta_aw
-                    delta += delta // 4 + 5
+                    delta += delta // 3 + 5
                     beta_aw = last_score + delta
                     if beta_aw > INFINITE: beta_aw = INFINITE
                 else:
