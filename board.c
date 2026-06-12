@@ -2606,6 +2606,9 @@ static CYTHON_INLINE int __Pyx_PyObject_SetAttrStr(PyObject* obj, PyObject* attr
 /* VoidPtrExport.proto */
 static int __Pyx_ExportVoidPtr(PyObject *name, void *p, const char *sig);
 
+/* FunctionExport.proto */
+static int __Pyx_ExportFunction(const char *name, void (*f)(void), const char *sig);
+
 /* MultiPhaseInitModuleState.proto */
 #if CYTHON_PEP489_MULTI_PHASE_INIT && CYTHON_USE_MODULE_STATE
 static PyObject *__Pyx_State_FindModule(void*);
@@ -24315,6 +24318,7 @@ static PY_LONG_LONG __pyx_f_8board_cy_19CustomBitboardBoard_run_perft_recursive(
  *                 nodes += self.run_perft_recursive(depth - 1)
  *             self.unmake_move_c()             # <<<<<<<<<<<<<<
  *         return nodes
+ * 
 */
     ((struct __pyx_vtabstruct_8board_cy_CustomBitboardBoard *)__pyx_v_self->__pyx_vtab)->unmake_move_c(__pyx_v_self);
   }
@@ -24323,6 +24327,8 @@ static PY_LONG_LONG __pyx_f_8board_cy_19CustomBitboardBoard_run_perft_recursive(
  *                 nodes += self.run_perft_recursive(depth - 1)
  *             self.unmake_move_c()
  *         return nodes             # <<<<<<<<<<<<<<
+ * 
+ * cdef void cy_get_evaluation_bonuses(CustomBitboardBoard board, int *mg_score, int *eg_score) noexcept nogil:
 */
   __pyx_r = __pyx_v_nodes;
   goto __pyx_L0;
@@ -25691,6 +25697,793 @@ static PyObject *__pyx_pf_8board_cy_19CustomBitboardBoard_28__setstate_cython__(
   return __pyx_r;
 }
 
+/* "board.pyx":1758
+ *         return nodes
+ * 
+ * cdef void cy_get_evaluation_bonuses(CustomBitboardBoard board, int *mg_score, int *eg_score) noexcept nogil:             # <<<<<<<<<<<<<<
+ *     cdef int mg = 0
+ *     cdef int eg = 0
+*/
+
+static void __pyx_f_8board_cy_cy_get_evaluation_bonuses(struct __pyx_obj_8board_cy_CustomBitboardBoard *__pyx_v_board, int *__pyx_v_mg_score, int *__pyx_v_eg_score) {
+  int __pyx_v_mg;
+  int __pyx_v_eg;
+  int __pyx_v_w_bishops;
+  int __pyx_v_b_bishops;
+  unsigned PY_LONG_LONG __pyx_v_friendly_occ_w;
+  unsigned PY_LONG_LONG __pyx_v_friendly_occ_b;
+  unsigned PY_LONG_LONG __pyx_v_both_occ;
+  int __pyx_v_sq_idx;
+  unsigned PY_LONG_LONG __pyx_v_bb;
+  unsigned PY_LONG_LONG __pyx_v_attacks;
+  int __pyx_v_mobility;
+  int __pyx_t_1;
+
+  /* "board.pyx":1759
+ * 
+ * cdef void cy_get_evaluation_bonuses(CustomBitboardBoard board, int *mg_score, int *eg_score) noexcept nogil:
+ *     cdef int mg = 0             # <<<<<<<<<<<<<<
+ *     cdef int eg = 0
+ * 
+*/
+  __pyx_v_mg = 0;
+
+  /* "board.pyx":1760
+ * cdef void cy_get_evaluation_bonuses(CustomBitboardBoard board, int *mg_score, int *eg_score) noexcept nogil:
+ *     cdef int mg = 0
+ *     cdef int eg = 0             # <<<<<<<<<<<<<<
+ * 
+ *     # 1. Bishop Pair Bonus (30 cp MG, 50 cp EG)
+*/
+  __pyx_v_eg = 0;
+
+  /* "board.pyx":1763
+ * 
+ *     # 1. Bishop Pair Bonus (30 cp MG, 50 cp EG)
+ *     cdef int w_bishops = cy_popcount_board(board._bb[P_B])             # <<<<<<<<<<<<<<
+ *     cdef int b_bishops = cy_popcount_board(board._bb[P_b])
+ *     if w_bishops >= 2:
+*/
+  __pyx_v_w_bishops = __pyx_f_8board_cy_cy_popcount_board((__pyx_v_board->_bb[__pyx_e_8board_cy_P_B]));
+
+  /* "board.pyx":1764
+ *     # 1. Bishop Pair Bonus (30 cp MG, 50 cp EG)
+ *     cdef int w_bishops = cy_popcount_board(board._bb[P_B])
+ *     cdef int b_bishops = cy_popcount_board(board._bb[P_b])             # <<<<<<<<<<<<<<
+ *     if w_bishops >= 2:
+ *         mg += 30
+*/
+  __pyx_v_b_bishops = __pyx_f_8board_cy_cy_popcount_board((__pyx_v_board->_bb[__pyx_e_8board_cy_P_b]));
+
+  /* "board.pyx":1765
+ *     cdef int w_bishops = cy_popcount_board(board._bb[P_B])
+ *     cdef int b_bishops = cy_popcount_board(board._bb[P_b])
+ *     if w_bishops >= 2:             # <<<<<<<<<<<<<<
+ *         mg += 30
+ *         eg += 50
+*/
+  __pyx_t_1 = (__pyx_v_w_bishops >= 2);
+  if (__pyx_t_1) {
+
+    /* "board.pyx":1766
+ *     cdef int b_bishops = cy_popcount_board(board._bb[P_b])
+ *     if w_bishops >= 2:
+ *         mg += 30             # <<<<<<<<<<<<<<
+ *         eg += 50
+ *     if b_bishops >= 2:
+*/
+    __pyx_v_mg = (__pyx_v_mg + 30);
+
+    /* "board.pyx":1767
+ *     if w_bishops >= 2:
+ *         mg += 30
+ *         eg += 50             # <<<<<<<<<<<<<<
+ *     if b_bishops >= 2:
+ *         mg -= 30
+*/
+    __pyx_v_eg = (__pyx_v_eg + 50);
+
+    /* "board.pyx":1765
+ *     cdef int w_bishops = cy_popcount_board(board._bb[P_B])
+ *     cdef int b_bishops = cy_popcount_board(board._bb[P_b])
+ *     if w_bishops >= 2:             # <<<<<<<<<<<<<<
+ *         mg += 30
+ *         eg += 50
+*/
+  }
+
+  /* "board.pyx":1768
+ *         mg += 30
+ *         eg += 50
+ *     if b_bishops >= 2:             # <<<<<<<<<<<<<<
+ *         mg -= 30
+ *         eg -= 50
+*/
+  __pyx_t_1 = (__pyx_v_b_bishops >= 2);
+  if (__pyx_t_1) {
+
+    /* "board.pyx":1769
+ *         eg += 50
+ *     if b_bishops >= 2:
+ *         mg -= 30             # <<<<<<<<<<<<<<
+ *         eg -= 50
+ * 
+*/
+    __pyx_v_mg = (__pyx_v_mg - 30);
+
+    /* "board.pyx":1770
+ *     if b_bishops >= 2:
+ *         mg -= 30
+ *         eg -= 50             # <<<<<<<<<<<<<<
+ * 
+ *     # 2. Piece Mobility Bonuses (3 cp per mobile square)
+*/
+    __pyx_v_eg = (__pyx_v_eg - 50);
+
+    /* "board.pyx":1768
+ *         mg += 30
+ *         eg += 50
+ *     if b_bishops >= 2:             # <<<<<<<<<<<<<<
+ *         mg -= 30
+ *         eg -= 50
+*/
+  }
+
+  /* "board.pyx":1773
+ * 
+ *     # 2. Piece Mobility Bonuses (3 cp per mobile square)
+ *     cdef unsigned long long friendly_occ_w = board._occ[WHITE]             # <<<<<<<<<<<<<<
+ *     cdef unsigned long long friendly_occ_b = board._occ[BLACK]
+ *     cdef unsigned long long both_occ = board._occ[2]
+*/
+  __pyx_v_friendly_occ_w = (__pyx_v_board->_occ[__pyx_e_8board_cy_WHITE]);
+
+  /* "board.pyx":1774
+ *     # 2. Piece Mobility Bonuses (3 cp per mobile square)
+ *     cdef unsigned long long friendly_occ_w = board._occ[WHITE]
+ *     cdef unsigned long long friendly_occ_b = board._occ[BLACK]             # <<<<<<<<<<<<<<
+ *     cdef unsigned long long both_occ = board._occ[2]
+ * 
+*/
+  __pyx_v_friendly_occ_b = (__pyx_v_board->_occ[__pyx_e_8board_cy_BLACK]);
+
+  /* "board.pyx":1775
+ *     cdef unsigned long long friendly_occ_w = board._occ[WHITE]
+ *     cdef unsigned long long friendly_occ_b = board._occ[BLACK]
+ *     cdef unsigned long long both_occ = board._occ[2]             # <<<<<<<<<<<<<<
+ * 
+ *     cdef int sq_idx
+*/
+  __pyx_v_both_occ = (__pyx_v_board->_occ[2]);
+
+  /* "board.pyx":1782
+ * 
+ *     # Knights (White)
+ *     bb = board._bb[P_N]             # <<<<<<<<<<<<<<
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)
+*/
+  __pyx_v_bb = (__pyx_v_board->_bb[__pyx_e_8board_cy_P_N]);
+
+  /* "board.pyx":1783
+ *     # Knights (White)
+ *     bb = board._bb[P_N]
+ *     while bb:             # <<<<<<<<<<<<<<
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+*/
+  while (1) {
+    __pyx_t_1 = (__pyx_v_bb != 0);
+    if (!__pyx_t_1) break;
+
+    /* "board.pyx":1784
+ *     bb = board._bb[P_N]
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)             # <<<<<<<<<<<<<<
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = _KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_w
+*/
+    __pyx_v_sq_idx = _cy_lsb_impl(__pyx_v_bb);
+
+    /* "board.pyx":1785
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)             # <<<<<<<<<<<<<<
+ *         attacks = _KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_w
+ *         mobility = cy_popcount_board(attacks)
+*/
+    __pyx_v_bb = (__pyx_v_bb & (~(((unsigned PY_LONG_LONG)1) << __pyx_v_sq_idx)));
+
+    /* "board.pyx":1786
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = _KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_w             # <<<<<<<<<<<<<<
+ *         mobility = cy_popcount_board(attacks)
+ *         mg += mobility * 3
+*/
+    __pyx_v_attacks = ((__pyx_v_8board_cy__KNIGHT_ATTACKS[__pyx_v_sq_idx]) & (~__pyx_v_friendly_occ_w));
+
+    /* "board.pyx":1787
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = _KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_w
+ *         mobility = cy_popcount_board(attacks)             # <<<<<<<<<<<<<<
+ *         mg += mobility * 3
+ *         eg += mobility * 3
+*/
+    __pyx_v_mobility = __pyx_f_8board_cy_cy_popcount_board(__pyx_v_attacks);
+
+    /* "board.pyx":1788
+ *         attacks = _KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_w
+ *         mobility = cy_popcount_board(attacks)
+ *         mg += mobility * 3             # <<<<<<<<<<<<<<
+ *         eg += mobility * 3
+ * 
+*/
+    __pyx_v_mg = (__pyx_v_mg + (__pyx_v_mobility * 3));
+
+    /* "board.pyx":1789
+ *         mobility = cy_popcount_board(attacks)
+ *         mg += mobility * 3
+ *         eg += mobility * 3             # <<<<<<<<<<<<<<
+ * 
+ *     # Knights (Black)
+*/
+    __pyx_v_eg = (__pyx_v_eg + (__pyx_v_mobility * 3));
+  }
+
+  /* "board.pyx":1792
+ * 
+ *     # Knights (Black)
+ *     bb = board._bb[P_n]             # <<<<<<<<<<<<<<
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)
+*/
+  __pyx_v_bb = (__pyx_v_board->_bb[__pyx_e_8board_cy_P_n]);
+
+  /* "board.pyx":1793
+ *     # Knights (Black)
+ *     bb = board._bb[P_n]
+ *     while bb:             # <<<<<<<<<<<<<<
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+*/
+  while (1) {
+    __pyx_t_1 = (__pyx_v_bb != 0);
+    if (!__pyx_t_1) break;
+
+    /* "board.pyx":1794
+ *     bb = board._bb[P_n]
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)             # <<<<<<<<<<<<<<
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = _KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_b
+*/
+    __pyx_v_sq_idx = _cy_lsb_impl(__pyx_v_bb);
+
+    /* "board.pyx":1795
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)             # <<<<<<<<<<<<<<
+ *         attacks = _KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_b
+ *         mobility = cy_popcount_board(attacks)
+*/
+    __pyx_v_bb = (__pyx_v_bb & (~(((unsigned PY_LONG_LONG)1) << __pyx_v_sq_idx)));
+
+    /* "board.pyx":1796
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = _KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_b             # <<<<<<<<<<<<<<
+ *         mobility = cy_popcount_board(attacks)
+ *         mg -= mobility * 3
+*/
+    __pyx_v_attacks = ((__pyx_v_8board_cy__KNIGHT_ATTACKS[__pyx_v_sq_idx]) & (~__pyx_v_friendly_occ_b));
+
+    /* "board.pyx":1797
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = _KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_b
+ *         mobility = cy_popcount_board(attacks)             # <<<<<<<<<<<<<<
+ *         mg -= mobility * 3
+ *         eg -= mobility * 3
+*/
+    __pyx_v_mobility = __pyx_f_8board_cy_cy_popcount_board(__pyx_v_attacks);
+
+    /* "board.pyx":1798
+ *         attacks = _KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_b
+ *         mobility = cy_popcount_board(attacks)
+ *         mg -= mobility * 3             # <<<<<<<<<<<<<<
+ *         eg -= mobility * 3
+ * 
+*/
+    __pyx_v_mg = (__pyx_v_mg - (__pyx_v_mobility * 3));
+
+    /* "board.pyx":1799
+ *         mobility = cy_popcount_board(attacks)
+ *         mg -= mobility * 3
+ *         eg -= mobility * 3             # <<<<<<<<<<<<<<
+ * 
+ *     # Bishops (White)
+*/
+    __pyx_v_eg = (__pyx_v_eg - (__pyx_v_mobility * 3));
+  }
+
+  /* "board.pyx":1802
+ * 
+ *     # Bishops (White)
+ *     bb = board._bb[P_B]             # <<<<<<<<<<<<<<
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)
+*/
+  __pyx_v_bb = (__pyx_v_board->_bb[__pyx_e_8board_cy_P_B]);
+
+  /* "board.pyx":1803
+ *     # Bishops (White)
+ *     bb = board._bb[P_B]
+ *     while bb:             # <<<<<<<<<<<<<<
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+*/
+  while (1) {
+    __pyx_t_1 = (__pyx_v_bb != 0);
+    if (!__pyx_t_1) break;
+
+    /* "board.pyx":1804
+ *     bb = board._bb[P_B]
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)             # <<<<<<<<<<<<<<
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_w
+*/
+    __pyx_v_sq_idx = _cy_lsb_impl(__pyx_v_bb);
+
+    /* "board.pyx":1805
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)             # <<<<<<<<<<<<<<
+ *         attacks = cy_get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_w
+ *         mobility = cy_popcount_board(attacks)
+*/
+    __pyx_v_bb = (__pyx_v_bb & (~(((unsigned PY_LONG_LONG)1) << __pyx_v_sq_idx)));
+
+    /* "board.pyx":1806
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_w             # <<<<<<<<<<<<<<
+ *         mobility = cy_popcount_board(attacks)
+ *         mg += mobility * 3
+*/
+    __pyx_v_attacks = (__pyx_f_8board_cy_cy_get_bishop_attacks(__pyx_v_sq_idx, __pyx_v_both_occ) & (~__pyx_v_friendly_occ_w));
+
+    /* "board.pyx":1807
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_w
+ *         mobility = cy_popcount_board(attacks)             # <<<<<<<<<<<<<<
+ *         mg += mobility * 3
+ *         eg += mobility * 3
+*/
+    __pyx_v_mobility = __pyx_f_8board_cy_cy_popcount_board(__pyx_v_attacks);
+
+    /* "board.pyx":1808
+ *         attacks = cy_get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_w
+ *         mobility = cy_popcount_board(attacks)
+ *         mg += mobility * 3             # <<<<<<<<<<<<<<
+ *         eg += mobility * 3
+ * 
+*/
+    __pyx_v_mg = (__pyx_v_mg + (__pyx_v_mobility * 3));
+
+    /* "board.pyx":1809
+ *         mobility = cy_popcount_board(attacks)
+ *         mg += mobility * 3
+ *         eg += mobility * 3             # <<<<<<<<<<<<<<
+ * 
+ *     # Bishops (Black)
+*/
+    __pyx_v_eg = (__pyx_v_eg + (__pyx_v_mobility * 3));
+  }
+
+  /* "board.pyx":1812
+ * 
+ *     # Bishops (Black)
+ *     bb = board._bb[P_b]             # <<<<<<<<<<<<<<
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)
+*/
+  __pyx_v_bb = (__pyx_v_board->_bb[__pyx_e_8board_cy_P_b]);
+
+  /* "board.pyx":1813
+ *     # Bishops (Black)
+ *     bb = board._bb[P_b]
+ *     while bb:             # <<<<<<<<<<<<<<
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+*/
+  while (1) {
+    __pyx_t_1 = (__pyx_v_bb != 0);
+    if (!__pyx_t_1) break;
+
+    /* "board.pyx":1814
+ *     bb = board._bb[P_b]
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)             # <<<<<<<<<<<<<<
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_b
+*/
+    __pyx_v_sq_idx = _cy_lsb_impl(__pyx_v_bb);
+
+    /* "board.pyx":1815
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)             # <<<<<<<<<<<<<<
+ *         attacks = cy_get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_b
+ *         mobility = cy_popcount_board(attacks)
+*/
+    __pyx_v_bb = (__pyx_v_bb & (~(((unsigned PY_LONG_LONG)1) << __pyx_v_sq_idx)));
+
+    /* "board.pyx":1816
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_b             # <<<<<<<<<<<<<<
+ *         mobility = cy_popcount_board(attacks)
+ *         mg -= mobility * 3
+*/
+    __pyx_v_attacks = (__pyx_f_8board_cy_cy_get_bishop_attacks(__pyx_v_sq_idx, __pyx_v_both_occ) & (~__pyx_v_friendly_occ_b));
+
+    /* "board.pyx":1817
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_b
+ *         mobility = cy_popcount_board(attacks)             # <<<<<<<<<<<<<<
+ *         mg -= mobility * 3
+ *         eg -= mobility * 3
+*/
+    __pyx_v_mobility = __pyx_f_8board_cy_cy_popcount_board(__pyx_v_attacks);
+
+    /* "board.pyx":1818
+ *         attacks = cy_get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_b
+ *         mobility = cy_popcount_board(attacks)
+ *         mg -= mobility * 3             # <<<<<<<<<<<<<<
+ *         eg -= mobility * 3
+ * 
+*/
+    __pyx_v_mg = (__pyx_v_mg - (__pyx_v_mobility * 3));
+
+    /* "board.pyx":1819
+ *         mobility = cy_popcount_board(attacks)
+ *         mg -= mobility * 3
+ *         eg -= mobility * 3             # <<<<<<<<<<<<<<
+ * 
+ *     # Rooks (White)
+*/
+    __pyx_v_eg = (__pyx_v_eg - (__pyx_v_mobility * 3));
+  }
+
+  /* "board.pyx":1822
+ * 
+ *     # Rooks (White)
+ *     bb = board._bb[P_R]             # <<<<<<<<<<<<<<
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)
+*/
+  __pyx_v_bb = (__pyx_v_board->_bb[__pyx_e_8board_cy_P_R]);
+
+  /* "board.pyx":1823
+ *     # Rooks (White)
+ *     bb = board._bb[P_R]
+ *     while bb:             # <<<<<<<<<<<<<<
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+*/
+  while (1) {
+    __pyx_t_1 = (__pyx_v_bb != 0);
+    if (!__pyx_t_1) break;
+
+    /* "board.pyx":1824
+ *     bb = board._bb[P_R]
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)             # <<<<<<<<<<<<<<
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_w
+*/
+    __pyx_v_sq_idx = _cy_lsb_impl(__pyx_v_bb);
+
+    /* "board.pyx":1825
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)             # <<<<<<<<<<<<<<
+ *         attacks = cy_get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_w
+ *         mobility = cy_popcount_board(attacks)
+*/
+    __pyx_v_bb = (__pyx_v_bb & (~(((unsigned PY_LONG_LONG)1) << __pyx_v_sq_idx)));
+
+    /* "board.pyx":1826
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_w             # <<<<<<<<<<<<<<
+ *         mobility = cy_popcount_board(attacks)
+ *         mg += mobility * 3
+*/
+    __pyx_v_attacks = (__pyx_f_8board_cy_cy_get_rook_attacks(__pyx_v_sq_idx, __pyx_v_both_occ) & (~__pyx_v_friendly_occ_w));
+
+    /* "board.pyx":1827
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_w
+ *         mobility = cy_popcount_board(attacks)             # <<<<<<<<<<<<<<
+ *         mg += mobility * 3
+ *         eg += mobility * 3
+*/
+    __pyx_v_mobility = __pyx_f_8board_cy_cy_popcount_board(__pyx_v_attacks);
+
+    /* "board.pyx":1828
+ *         attacks = cy_get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_w
+ *         mobility = cy_popcount_board(attacks)
+ *         mg += mobility * 3             # <<<<<<<<<<<<<<
+ *         eg += mobility * 3
+ * 
+*/
+    __pyx_v_mg = (__pyx_v_mg + (__pyx_v_mobility * 3));
+
+    /* "board.pyx":1829
+ *         mobility = cy_popcount_board(attacks)
+ *         mg += mobility * 3
+ *         eg += mobility * 3             # <<<<<<<<<<<<<<
+ * 
+ *     # Rooks (Black)
+*/
+    __pyx_v_eg = (__pyx_v_eg + (__pyx_v_mobility * 3));
+  }
+
+  /* "board.pyx":1832
+ * 
+ *     # Rooks (Black)
+ *     bb = board._bb[P_r]             # <<<<<<<<<<<<<<
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)
+*/
+  __pyx_v_bb = (__pyx_v_board->_bb[__pyx_e_8board_cy_P_r]);
+
+  /* "board.pyx":1833
+ *     # Rooks (Black)
+ *     bb = board._bb[P_r]
+ *     while bb:             # <<<<<<<<<<<<<<
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+*/
+  while (1) {
+    __pyx_t_1 = (__pyx_v_bb != 0);
+    if (!__pyx_t_1) break;
+
+    /* "board.pyx":1834
+ *     bb = board._bb[P_r]
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)             # <<<<<<<<<<<<<<
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_b
+*/
+    __pyx_v_sq_idx = _cy_lsb_impl(__pyx_v_bb);
+
+    /* "board.pyx":1835
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)             # <<<<<<<<<<<<<<
+ *         attacks = cy_get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_b
+ *         mobility = cy_popcount_board(attacks)
+*/
+    __pyx_v_bb = (__pyx_v_bb & (~(((unsigned PY_LONG_LONG)1) << __pyx_v_sq_idx)));
+
+    /* "board.pyx":1836
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_b             # <<<<<<<<<<<<<<
+ *         mobility = cy_popcount_board(attacks)
+ *         mg -= mobility * 3
+*/
+    __pyx_v_attacks = (__pyx_f_8board_cy_cy_get_rook_attacks(__pyx_v_sq_idx, __pyx_v_both_occ) & (~__pyx_v_friendly_occ_b));
+
+    /* "board.pyx":1837
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_b
+ *         mobility = cy_popcount_board(attacks)             # <<<<<<<<<<<<<<
+ *         mg -= mobility * 3
+ *         eg -= mobility * 3
+*/
+    __pyx_v_mobility = __pyx_f_8board_cy_cy_popcount_board(__pyx_v_attacks);
+
+    /* "board.pyx":1838
+ *         attacks = cy_get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_b
+ *         mobility = cy_popcount_board(attacks)
+ *         mg -= mobility * 3             # <<<<<<<<<<<<<<
+ *         eg -= mobility * 3
+ * 
+*/
+    __pyx_v_mg = (__pyx_v_mg - (__pyx_v_mobility * 3));
+
+    /* "board.pyx":1839
+ *         mobility = cy_popcount_board(attacks)
+ *         mg -= mobility * 3
+ *         eg -= mobility * 3             # <<<<<<<<<<<<<<
+ * 
+ *     # Queens (White)
+*/
+    __pyx_v_eg = (__pyx_v_eg - (__pyx_v_mobility * 3));
+  }
+
+  /* "board.pyx":1842
+ * 
+ *     # Queens (White)
+ *     bb = board._bb[P_Q]             # <<<<<<<<<<<<<<
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)
+*/
+  __pyx_v_bb = (__pyx_v_board->_bb[__pyx_e_8board_cy_P_Q]);
+
+  /* "board.pyx":1843
+ *     # Queens (White)
+ *     bb = board._bb[P_Q]
+ *     while bb:             # <<<<<<<<<<<<<<
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+*/
+  while (1) {
+    __pyx_t_1 = (__pyx_v_bb != 0);
+    if (!__pyx_t_1) break;
+
+    /* "board.pyx":1844
+ *     bb = board._bb[P_Q]
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)             # <<<<<<<<<<<<<<
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_w
+*/
+    __pyx_v_sq_idx = _cy_lsb_impl(__pyx_v_bb);
+
+    /* "board.pyx":1845
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)             # <<<<<<<<<<<<<<
+ *         attacks = cy_get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_w
+ *         mobility = cy_popcount_board(attacks)
+*/
+    __pyx_v_bb = (__pyx_v_bb & (~(((unsigned PY_LONG_LONG)1) << __pyx_v_sq_idx)));
+
+    /* "board.pyx":1846
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_w             # <<<<<<<<<<<<<<
+ *         mobility = cy_popcount_board(attacks)
+ *         mg += mobility * 3
+*/
+    __pyx_v_attacks = (__pyx_f_8board_cy_cy_get_queen_attacks(__pyx_v_sq_idx, __pyx_v_both_occ) & (~__pyx_v_friendly_occ_w));
+
+    /* "board.pyx":1847
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_w
+ *         mobility = cy_popcount_board(attacks)             # <<<<<<<<<<<<<<
+ *         mg += mobility * 3
+ *         eg += mobility * 3
+*/
+    __pyx_v_mobility = __pyx_f_8board_cy_cy_popcount_board(__pyx_v_attacks);
+
+    /* "board.pyx":1848
+ *         attacks = cy_get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_w
+ *         mobility = cy_popcount_board(attacks)
+ *         mg += mobility * 3             # <<<<<<<<<<<<<<
+ *         eg += mobility * 3
+ * 
+*/
+    __pyx_v_mg = (__pyx_v_mg + (__pyx_v_mobility * 3));
+
+    /* "board.pyx":1849
+ *         mobility = cy_popcount_board(attacks)
+ *         mg += mobility * 3
+ *         eg += mobility * 3             # <<<<<<<<<<<<<<
+ * 
+ *     # Queens (Black)
+*/
+    __pyx_v_eg = (__pyx_v_eg + (__pyx_v_mobility * 3));
+  }
+
+  /* "board.pyx":1852
+ * 
+ *     # Queens (Black)
+ *     bb = board._bb[P_q]             # <<<<<<<<<<<<<<
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)
+*/
+  __pyx_v_bb = (__pyx_v_board->_bb[__pyx_e_8board_cy_P_q]);
+
+  /* "board.pyx":1853
+ *     # Queens (Black)
+ *     bb = board._bb[P_q]
+ *     while bb:             # <<<<<<<<<<<<<<
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+*/
+  while (1) {
+    __pyx_t_1 = (__pyx_v_bb != 0);
+    if (!__pyx_t_1) break;
+
+    /* "board.pyx":1854
+ *     bb = board._bb[P_q]
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)             # <<<<<<<<<<<<<<
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_b
+*/
+    __pyx_v_sq_idx = _cy_lsb_impl(__pyx_v_bb);
+
+    /* "board.pyx":1855
+ *     while bb:
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)             # <<<<<<<<<<<<<<
+ *         attacks = cy_get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_b
+ *         mobility = cy_popcount_board(attacks)
+*/
+    __pyx_v_bb = (__pyx_v_bb & (~(((unsigned PY_LONG_LONG)1) << __pyx_v_sq_idx)));
+
+    /* "board.pyx":1856
+ *         sq_idx = _cy_lsb_impl(bb)
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_b             # <<<<<<<<<<<<<<
+ *         mobility = cy_popcount_board(attacks)
+ *         mg -= mobility * 3
+*/
+    __pyx_v_attacks = (__pyx_f_8board_cy_cy_get_queen_attacks(__pyx_v_sq_idx, __pyx_v_both_occ) & (~__pyx_v_friendly_occ_b));
+
+    /* "board.pyx":1857
+ *         bb = bb & ~(<unsigned long long>1 << sq_idx)
+ *         attacks = cy_get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_b
+ *         mobility = cy_popcount_board(attacks)             # <<<<<<<<<<<<<<
+ *         mg -= mobility * 3
+ *         eg -= mobility * 3
+*/
+    __pyx_v_mobility = __pyx_f_8board_cy_cy_popcount_board(__pyx_v_attacks);
+
+    /* "board.pyx":1858
+ *         attacks = cy_get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_b
+ *         mobility = cy_popcount_board(attacks)
+ *         mg -= mobility * 3             # <<<<<<<<<<<<<<
+ *         eg -= mobility * 3
+ * 
+*/
+    __pyx_v_mg = (__pyx_v_mg - (__pyx_v_mobility * 3));
+
+    /* "board.pyx":1859
+ *         mobility = cy_popcount_board(attacks)
+ *         mg -= mobility * 3
+ *         eg -= mobility * 3             # <<<<<<<<<<<<<<
+ * 
+ *     mg_score[0] = mg
+*/
+    __pyx_v_eg = (__pyx_v_eg - (__pyx_v_mobility * 3));
+  }
+
+  /* "board.pyx":1861
+ *         eg -= mobility * 3
+ * 
+ *     mg_score[0] = mg             # <<<<<<<<<<<<<<
+ *     eg_score[0] = eg
+ * 
+*/
+  (__pyx_v_mg_score[0]) = __pyx_v_mg;
+
+  /* "board.pyx":1862
+ * 
+ *     mg_score[0] = mg
+ *     eg_score[0] = eg             # <<<<<<<<<<<<<<
+ * 
+*/
+  (__pyx_v_eg_score[0]) = __pyx_v_eg;
+
+  /* "board.pyx":1758
+ *         return nodes
+ * 
+ * cdef void cy_get_evaluation_bonuses(CustomBitboardBoard board, int *mg_score, int *eg_score) noexcept nogil:             # <<<<<<<<<<<<<<
+ *     cdef int mg = 0
+ *     cdef int eg = 0
+*/
+
+  /* function exit code */
+}
+
 /* "(tree fragment)":1
  * def __pyx_unpickle_CustomBitboardBoard(__pyx_type, long __pyx_checksum, __pyx_state):             # <<<<<<<<<<<<<<
  *     cdef object __pyx_PickleError
@@ -26509,10 +27302,17 @@ static int __Pyx_modinit_variable_export_code(__pyx_mstatetype *__pyx_mstate) {
 static int __Pyx_modinit_function_export_code(__pyx_mstatetype *__pyx_mstate) {
   __Pyx_RefNannyDeclarations
   CYTHON_UNUSED_VAR(__pyx_mstate);
+  int __pyx_lineno = 0;
+  const char *__pyx_filename = NULL;
+  int __pyx_clineno = 0;
   __Pyx_RefNannySetupContext("__Pyx_modinit_function_export_code", 0);
   /*--- Function export code ---*/
+  if (__Pyx_ExportFunction("cy_get_evaluation_bonuses", (void (*)(void))__pyx_f_8board_cy_cy_get_evaluation_bonuses, "void (struct __pyx_obj_8board_cy_CustomBitboardBoard *, int *, int *)") < 0) __PYX_ERR(0, 1, __pyx_L1_error)
   __Pyx_RefNannyFinishContext();
   return 0;
+  __pyx_L1_error:;
+  __Pyx_RefNannyFinishContext();
+  return -1;
 }
 
 static int __Pyx_modinit_type_init_code(__pyx_mstatetype *__pyx_mstate) {
@@ -26885,7 +27685,7 @@ __Pyx_RefNannySetupContext("PyInit_board_cy", 0);
   /*--- Global type/function init code ---*/
   (void)__Pyx_modinit_global_init_code(__pyx_mstate);
   if (unlikely((__Pyx_modinit_variable_export_code(__pyx_mstate) < 0))) __PYX_ERR(0, 1, __pyx_L1_error)
-  (void)__Pyx_modinit_function_export_code(__pyx_mstate);
+  if (unlikely((__Pyx_modinit_function_export_code(__pyx_mstate) < 0))) __PYX_ERR(0, 1, __pyx_L1_error)
   if (unlikely((__Pyx_modinit_type_init_code(__pyx_mstate) < 0))) __PYX_ERR(0, 1, __pyx_L1_error)
   (void)__Pyx_modinit_type_import_code(__pyx_mstate);
   (void)__Pyx_modinit_variable_import_code(__pyx_mstate);
@@ -35817,6 +36617,39 @@ static int __Pyx_ExportVoidPtr(PyObject *name, void *p, const char *sig) {
     if (!cobj)
         goto bad;
     if (PyDict_SetItem(d, name, cobj) < 0)
+        goto bad;
+    Py_DECREF(cobj);
+    Py_DECREF(d);
+    return 0;
+bad:
+    Py_XDECREF(cobj);
+    Py_XDECREF(d);
+    return -1;
+}
+
+/* FunctionExport */
+static int __Pyx_ExportFunction(const char *name, void (*f)(void), const char *sig) {
+    PyObject *d = 0;
+    PyObject *cobj = 0;
+    union {
+        void (*fp)(void);
+        void *p;
+    } tmp;
+    d = PyObject_GetAttrString(__pyx_m, "__pyx_capi__");
+    if (!d) {
+        PyErr_Clear();
+        d = PyDict_New();
+        if (!d)
+            goto bad;
+        Py_INCREF(d);
+        if (PyModule_AddObject(__pyx_m, "__pyx_capi__", d) < 0)
+            goto bad;
+    }
+    tmp.fp = f;
+    cobj = PyCapsule_New(tmp.p, sig, 0);
+    if (!cobj)
+        goto bad;
+    if (PyDict_SetItemString(d, name, cobj) < 0)
         goto bad;
     Py_DECREF(cobj);
     Py_DECREF(d);

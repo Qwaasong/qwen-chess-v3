@@ -1,6 +1,5 @@
 """Search Engine and Evaluator for qwen-chess-v3."""
 
-import random
 import time
 
 import chess
@@ -19,6 +18,10 @@ try:
         lsb,
         clear_bit,
         WHITE,
+        KNIGHT_ATTACKS,
+        get_bishop_attacks,
+        get_rook_attacks,
+        get_queen_attacks,
     )
 except ImportError:
     from board import (
@@ -34,6 +37,10 @@ except ImportError:
         lsb,
         clear_bit,
         WHITE,
+        KNIGHT_ATTACKS,
+        get_bishop_attacks,
+        get_rook_attacks,
+        get_queen_attacks,
     )
 
 # --- Configuration ---
@@ -203,6 +210,7 @@ info = SearchInfo()
 tt = {}  # Transposition Table
 killer_moves = [[0] * 64 for _ in range(2)]
 history_moves = [[0] * 64 for _ in range(12)]
+counter_moves = [[-1] * 64 for _ in range(12)]
 LMR_REDUCTIONS = [[0] * 64 for _ in range(64)]
 
 def init_lmr_reductions():
@@ -215,6 +223,48 @@ def init_lmr_reductions():
                 LMR_REDUCTIONS[depth][move_count] = int(0.5 + math.log(depth) * math.log(move_count) / 1.95 * 1024)
 
 init_lmr_reductions()
+
+
+# --- Pawn evaluation masks ---
+PASSED_PAWN_MASK_W = [0] * 64
+PASSED_PAWN_MASK_B = [0] * 64
+ADJACENT_FILES_MASK = [0] * 8
+
+def init_pawn_masks():
+    for f in range(8):
+        mask = 0
+        if f > 0:
+            mask |= (0x0101010101010101 << (f - 1))
+        if f < 7:
+            mask |= (0x0101010101010101 << (f + 1))
+        ADJACENT_FILES_MASK[f] = mask
+
+    for sq in range(64):
+        r_coord = sq // 8
+        f_coord = sq % 8
+
+        min_f = f_coord - 1
+        if min_f < 0:
+            min_f = 0
+        max_f = f_coord + 1
+        if max_f > 7:
+            max_f = 7
+
+        # White passed pawn mask
+        mask = 0
+        for f in range(min_f, max_f + 1):
+            for r in range(r_coord + 1, 8):
+                mask |= (1 << (r * 8 + f))
+        PASSED_PAWN_MASK_W[sq] = mask
+
+        # Black passed pawn mask
+        mask = 0
+        for f in range(min_f, max_f + 1):
+            for r in range(0, r_coord):
+                mask |= (1 << (r * 8 + f))
+        PASSED_PAWN_MASK_B[sq] = mask
+
+init_pawn_masks()
 
 
 # --- Evaluation Function ---
@@ -233,6 +283,20 @@ def evaluate(board: CustomBitboardBoard) -> int:
     score_mg = 0
     score_eg = 0
 
+    # 1. Bishop Pair Bonus (30 cp MG, 50 cp EG)
+    w_bishops = board.bitboards[2].bit_count()
+    b_bishops = board.bitboards[8].bit_count()
+    if w_bishops >= 2:
+        score_mg += 30
+        score_eg += 50
+    if b_bishops >= 2:
+        score_mg -= 30
+        score_eg -= 50
+
+    friendly_occ_w = board.occupancies[0]
+    friendly_occ_b = board.occupancies[1]
+    both_occ = board.occupancies[2]
+
     # White pieces (0-5)
     for p_idx in range(6):
         bb = board.bitboards[p_idx]
@@ -241,6 +305,24 @@ def evaluate(board: CustomBitboardBoard) -> int:
             bb = clear_bit(bb, sq_idx)
             score_mg += white_piece_values_mg[p_idx][sq_idx]
             score_eg += white_piece_values_eg[p_idx][sq_idx]
+            
+            # Mobility (White Knights=1, Bishops=2, Rooks=3, Queens=4)
+            if p_idx == 1:
+                mobility = (KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_w).bit_count()
+                score_mg += mobility * 3
+                score_eg += mobility * 3
+            elif p_idx == 2:
+                mobility = (get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_w).bit_count()
+                score_mg += mobility * 3
+                score_eg += mobility * 3
+            elif p_idx == 3:
+                mobility = (get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_w).bit_count()
+                score_mg += mobility * 3
+                score_eg += mobility * 3
+            elif p_idx == 4:
+                mobility = (get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_w).bit_count()
+                score_mg += mobility * 3
+                score_eg += mobility * 3
 
     # Black pieces (6-11)
     for p_idx in range(6):
@@ -250,6 +332,131 @@ def evaluate(board: CustomBitboardBoard) -> int:
             bb = clear_bit(bb, sq_idx)
             score_mg -= black_piece_values_mg[p_idx][sq_idx]
             score_eg -= black_piece_values_eg[p_idx][sq_idx]
+            
+            # Mobility (Black Knights=1, Bishops=2, Rooks=3, Queens=4)
+            if p_idx == 1:
+                mobility = (KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_b).bit_count()
+                score_mg -= mobility * 3
+                score_eg -= mobility * 3
+            elif p_idx == 2:
+                mobility = (get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_b).bit_count()
+                score_mg -= mobility * 3
+                score_eg -= mobility * 3
+            elif p_idx == 3:
+                mobility = (get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_b).bit_count()
+                score_mg -= mobility * 3
+                score_eg -= mobility * 3
+            elif p_idx == 4:
+                mobility = (get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_b).bit_count()
+                score_mg -= mobility * 3
+                score_eg -= mobility * 3
+
+    # 3. Doubled Pawns penalty
+    w_pawns = board.bitboards[0]  # P_P = 0
+    b_pawns = board.bitboards[6]  # P_p = 6
+    
+    for f in range(8):
+        file_mask = 0x0101010101010101 << f
+        w_count = (w_pawns & file_mask).bit_count()
+        if w_count > 1:
+            score_mg += (w_count - 1) * -15
+            score_eg += (w_count - 1) * -15
+        
+        b_count = (b_pawns & file_mask).bit_count()
+        if b_count > 1:
+            score_mg -= (b_count - 1) * -15
+            score_eg -= (b_count - 1) * -15
+
+    # 4. Passed & Isolated Pawns
+    passed_pawn_mg = [0, 0, 5, 10, 20, 40, 80, 0]
+    passed_pawn_eg = [0, 0, 10, 20, 40, 80, 160, 0]
+
+    # White Pawns
+    bb = w_pawns
+    while bb:
+        sq_idx = lsb(bb)
+        bb = clear_bit(bb, sq_idx)
+        r = sq_idx // 8
+        f = sq_idx % 8
+
+        # Isolated
+        if (w_pawns & ADJACENT_FILES_MASK[f]) == 0:
+            score_mg -= 15
+            score_eg -= 15
+        
+        # Passed
+        if (b_pawns & PASSED_PAWN_MASK_W[sq_idx]) == 0:
+            score_mg += passed_pawn_mg[r]
+            score_eg += passed_pawn_eg[r]
+
+    # Black Pawns
+    bb = b_pawns
+    while bb:
+        sq_idx = lsb(bb)
+        bb = clear_bit(bb, sq_idx)
+        r = sq_idx // 8
+        f = sq_idx % 8
+
+        # Isolated
+        if (b_pawns & ADJACENT_FILES_MASK[f]) == 0:
+            score_mg += 15
+            score_eg += 15
+
+        # Passed
+        if (w_pawns & PASSED_PAWN_MASK_B[sq_idx]) == 0:
+            score_mg -= passed_pawn_mg[7 - r]
+            score_eg -= passed_pawn_eg[7 - r]
+
+    # 5. King Safety (files g/h or b/c) on first rank (White) / eighth rank (Black)
+    w_king_bb = board.bitboards[5] # P_K = 5
+    if w_king_bb:
+        sq_idx = lsb(w_king_bb)
+        r = sq_idx // 8
+        f = sq_idx % 8
+        if r == 0:
+            w_ks_penalty = 0
+            if f == 6 or f == 7: # King side (G1/H1)
+                for file_idx in range(5, 8):
+                    if (w_pawns & (1 << (8 + file_idx))):
+                        pass
+                    elif (w_pawns & (1 << (16 + file_idx))):
+                        w_ks_penalty += 10
+                    else:
+                        w_ks_penalty += 25
+            elif f == 1 or f == 2: # Queen side (B1/C1)
+                for file_idx in range(0, 3):
+                    if (w_pawns & (1 << (8 + file_idx))):
+                        pass
+                    elif (w_pawns & (1 << (16 + file_idx))):
+                        w_ks_penalty += 10
+                    else:
+                        w_ks_penalty += 25
+            score_mg -= w_ks_penalty
+
+    b_king_bb = board.bitboards[11] # P_k = 11
+    if b_king_bb:
+        sq_idx = lsb(b_king_bb)
+        r = sq_idx // 8
+        f = sq_idx % 8
+        if r == 7:
+            b_ks_penalty = 0
+            if f == 6 or f == 7: # King side (G8/H8)
+                for file_idx in range(5, 8):
+                    if (b_pawns & (1 << (48 + file_idx))):
+                        pass
+                    elif (b_pawns & (1 << (40 + file_idx))):
+                        b_ks_penalty += 10
+                    else:
+                        b_ks_penalty += 25
+            elif f == 1 or f == 2: # Queen side (B8/C8)
+                for file_idx in range(0, 3):
+                    if (b_pawns & (1 << (48 + file_idx))):
+                        pass
+                    elif (b_pawns & (1 << (40 + file_idx))):
+                        b_ks_penalty += 10
+                    else:
+                        b_ks_penalty += 25
+            score_mg += b_ks_penalty
 
     # Interpolate between Middlegame and Endgame and return as C-like rounded integer
     return int((score_mg * phase + score_eg * (24 - phase)) / 24)
@@ -371,6 +578,7 @@ def negamax(
     color: int,
     ply: int,
     extensions: int = 0,
+    prev_move: int = -1,
 ) -> int:
     """Recursively searches the game tree using Alpha-Beta Negamax algorithm."""
     info.nodes += 1
@@ -436,7 +644,7 @@ def negamax(
         if has_non_pawn:
             R = 3 + depth // 4
             if board.make_null_move():
-                val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended)
+                val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended, -1)
                 board.unmake_move()
                 
                 if info.stop:
@@ -445,7 +653,7 @@ def negamax(
                 if val >= beta:
                     # Verification search for deep cuts (anti-zugzwang verification)
                     if depth >= 6:
-                        val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended)
+                        val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended, prev_move)
                         if val >= beta:
                             return val
                     else:
@@ -471,6 +679,14 @@ def negamax(
 
     pseudo_moves = board.generate_pseudo_legal_moves()
 
+    # Resolve Countermove Heuristic
+    counter_move = -1
+    if prev_move != -1:
+        prev_to = get_move_dest(prev_move)
+        prev_piece = board.get_piece_at(prev_to)
+        if prev_piece is not None:
+            counter_move = counter_moves[prev_piece][prev_to]
+
     # Move Ordering
     moves_scored = []
     for move in pseudo_moves:
@@ -491,6 +707,8 @@ def negamax(
                     score = 9000
                 elif move == killer_moves[1][ply]:
                     score = 8000
+                elif move == counter_move:
+                    score = 7500
                 else:
                     p_type = board.get_piece_at(from_sq)
                     if p_type is not None:
@@ -520,7 +738,7 @@ def negamax(
         legal_moves_searched += 1
 
         if legal_moves_searched == 1:
-            val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)
+            val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move)
         else:
             # --- Late Move Reductions (LMR) ---
             if (depth >= 2 and 
@@ -541,7 +759,7 @@ def negamax(
                 
                 p_type = board.get_piece_at(to_sq) # the piece is already moved to to_sq
                 if p_type is not None:
-                    if history_moves[p_type][to_sq] > 2000:
+                    if history_moves[p_type][to_sq] > 3000:
                         r_int -= 1
                     elif history_moves[p_type][to_sq] < 500:
                         r_int += 1
@@ -552,18 +770,18 @@ def negamax(
                     r_int = depth - 1
 
                 # Search at reduced depth with null window
-                val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)
+                val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move)
                 
                 # Re-search at full depth with null window if reduced search failed high
                 if val > alpha and r_int > 0:
-                    val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)
+                    val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move)
             else:
                 # Search at full depth with null window
-                val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended)
+                val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move)
             
             # Re-search with full window if null window search failed high
             if val > alpha and val < beta:
-                val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended)
+                val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move)
         
         board.unmake_move()
 
@@ -589,6 +807,13 @@ def negamax(
                     history_moves[p_type][to_sq] += depth * depth
                     if history_moves[p_type][to_sq] > 5000:
                         history_moves[p_type][to_sq] = 5000
+                
+                # Countermove update
+                if prev_move != -1:
+                    prev_to = get_move_dest(prev_move)
+                    prev_piece = board.get_piece_at(prev_to)
+                    if prev_piece is not None:
+                        counter_moves[prev_piece][prev_to] = move
             break
 
     if info.stop:
@@ -616,40 +841,6 @@ def negamax(
     return best_val
 
 
-# --- Opening Book Setup ---
-def build_opening_book() -> dict[str, list[chess.Move]]:
-    """Builds a simple opening book database from standard opening lines."""
-    book = {}
-    lines = [
-        ["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4", "Nf6", "O-O", "Be7"],
-        ["e4", "c5", "Nf3", "d6", "d4", "cxd4", "Nxd4", "Nf6", "Nc3", "a6"],
-        ["d4", "d5", "c4", "e6", "Nc3", "Nf6", "Bg5", "Be7", "e3", "O-O"],
-        ["e4", "c6", "d4", "d5", "Nc3", "dxe4", "Nxe4", "Bf5", "Ng3", "Bg6"],
-        ["e4", "e6", "d4", "d5", "Nc3", "Nf6", "Bg5", "Be7", "e5", "Nfd7"],
-        ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5", "c3", "Nf6", "d3", "d6"],
-        ["e4", "d5", "exd5", "Qxd5", "Nc3", "Qa5", "d4", "Nf6"],
-        ["d4", "Nf6", "c4", "g6", "Nc3", "Bg7", "e4", "d6", "Nf3", "O-O"],
-        ["d4", "d5", "c4", "c6", "Nf3", "Nf6", "Nc3", "e6", "e3", "Nbd7"],
-        ["c4", "e5", "Nc3", "Nf6", "g3", "d5", "cxd5", "Nxd5", "Bg2"]
-    ]
-    for line in lines:
-        temp_board = chess.Board()
-        for move_str in line:
-            try:
-                move = temp_board.parse_san(move_str)
-                key = " ".join(temp_board.fen().split()[:4])
-                if key not in book:
-                    book[key] = []
-                if move not in book[key]:
-                    book[key].append(move)
-                temp_board.push(move)
-            except ValueError:
-                continue
-    return book
-
-
-OPENING_BOOK = build_opening_book()
-
 
 # --- Main Engine API ---
 def get_best_move(
@@ -659,13 +850,6 @@ def get_best_move(
     print_info: bool = False,
 ) -> chess.Move | None:
     """Finds the best move using iterative deepening search."""
-    # 1. Opening Book Check
-    key = " ".join(chess_board.fen().split()[:4])
-    if key in OPENING_BOOK:
-        moves = OPENING_BOOK[key]
-        if moves:
-            return random.choice(moves)
-
     # 2. Setup Search state
     info.start_time = time.time()
     info.time_limit = time_limit
@@ -675,9 +859,10 @@ def get_best_move(
     # 3. Convert python-chess Board to CustomBitboardBoard
     board = CustomBitboardBoard.from_chess_board(chess_board)
 
-    global killer_moves, history_moves
+    global killer_moves, history_moves, counter_moves
     killer_moves = [[0] * 64 for _ in range(2)]
     history_moves = [[0] * 64 for _ in range(12)]
+    counter_moves = [[-1] * 64 for _ in range(12)]
 
     legal_moves = board.generate_legal_moves()
     if not legal_moves:
@@ -691,7 +876,7 @@ def get_best_move(
         if depth_limit > 0 and depth > depth_limit:
             break
         info.current_depth = depth
-        negamax(board, depth, -INFINITE, INFINITE, color, 0)
+        negamax(board, depth, -INFINITE, INFINITE, color, 0, 0, -1)
 
         if info.stop:
             break
@@ -746,11 +931,6 @@ try:
         search_mode: int = 1,
     ) -> chess.Move | None:
         info.root_ponder_move = -1
-        key = " ".join(chess_board.fen().split()[:4])
-        if key in OPENING_BOOK:
-            moves = OPENING_BOOK[key]
-            if moves:
-                return random.choice(moves)
         return _get_best_move_cy(chess_board, time_limit, depth_limit, print_info, search_mode)
 
     class CythonInfoWrapper:

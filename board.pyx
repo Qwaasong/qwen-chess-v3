@@ -303,12 +303,15 @@ cdef int               _BISHOP_BITS[64]
 cdef int               _ROOK_BITS[64]
 cdef unsigned long long _BISHOP_ATTACKS[64][512]
 cdef unsigned long long _ROOK_ATTACKS[64][4096]
+cdef unsigned long long _PASSED_PAWN_MASK_W[64]
+cdef unsigned long long _PASSED_PAWN_MASK_B[64]
+cdef unsigned long long _ADJACENT_FILES_MASK[8]
 
 
 def _init_attack_tables():
     """Initialises all precomputed attack tables (Python lists + C arrays)."""
-    cdef int sq_idx, r_coord, f_coord, dr, df, nr_coord, nf_coord
-    cdef unsigned long long k_att, king_att, wp_att, bp_att, occ, atk
+    cdef int sq_idx, r_coord, f_coord, dr, df, nr_coord, nf_coord, min_f, max_f, f_idx, r_idx, f
+    cdef unsigned long long k_att, king_att, wp_att, bp_att, occ, atk, mask, adj_mask
     cdef int b_bits, r_bits, i_val
     cdef unsigned long long b_mask, r_mask, b_magic, r_magic, idx_val
 
@@ -378,6 +381,41 @@ def _init_attack_tables():
             atk     = rook_attacks_on_the_fly(sq_idx, occ)
             ROOK_ATTACKS[sq_idx][idx_val] = atk
             _ROOK_ATTACKS[sq_idx][idx_val] = atk
+
+    # Initialize adjacent files masks
+    for f in range(8):
+        adj_mask = 0
+        if f > 0:
+            adj_mask |= (0x0101010101010101ULL << (f - 1))
+        if f < 7:
+            adj_mask |= (0x0101010101010101ULL << (f + 1))
+        _ADJACENT_FILES_MASK[f] = adj_mask
+
+    # Initialize passed pawn masks
+    for sq_idx in range(64):
+        r_coord = sq_idx // 8
+        f_coord = sq_idx % 8
+
+        min_f = f_coord - 1
+        if min_f < 0:
+            min_f = 0
+        max_f = f_coord + 1
+        if max_f > 7:
+            max_f = 7
+
+        # White passed pawn mask
+        mask = 0
+        for f_idx in range(min_f, max_f + 1):
+            for r_idx in range(r_coord + 1, 8):
+                mask |= (<unsigned long long>1 << (r_idx * 8 + f_idx))
+        _PASSED_PAWN_MASK_W[sq_idx] = mask
+
+        # Black passed pawn mask
+        mask = 0
+        for f_idx in range(min_f, max_f + 1):
+            for r_idx in range(0, r_coord):
+                mask |= (<unsigned long long>1 << (r_idx * 8 + f_idx))
+        _PASSED_PAWN_MASK_B[sq_idx] = mask
 
 
 _init_attack_tables()
@@ -1754,3 +1792,267 @@ cdef class CustomBitboardBoard:
                 nodes += self.run_perft_recursive(depth - 1)
             self.unmake_move_c()
         return nodes
+
+cdef void cy_evaluate_pawns(CustomBitboardBoard board, int *mg_score, int *eg_score) noexcept nogil:
+    cdef int mg = 0
+    cdef int eg = 0
+
+    cdef int passed_pawn_mg[8]
+    passed_pawn_mg[0] = 0
+    passed_pawn_mg[1] = 0
+    passed_pawn_mg[2] = 5
+    passed_pawn_mg[3] = 10
+    passed_pawn_mg[4] = 20
+    passed_pawn_mg[5] = 40
+    passed_pawn_mg[6] = 80
+    passed_pawn_mg[7] = 0
+
+    cdef int passed_pawn_eg[8]
+    passed_pawn_eg[0] = 0
+    passed_pawn_eg[1] = 0
+    passed_pawn_eg[2] = 10
+    passed_pawn_eg[3] = 20
+    passed_pawn_eg[4] = 40
+    passed_pawn_eg[5] = 80
+    passed_pawn_eg[6] = 160
+    passed_pawn_eg[7] = 0
+
+    cdef unsigned long long w_pawns = board._bb[P_P]
+    cdef unsigned long long b_pawns = board._bb[P_p]
+    cdef unsigned long long bb
+    cdef int sq_idx, r, f, w_count, b_count
+
+    # 1. Doubled Pawns penalty
+    for f in range(8):
+        # White doubled pawns
+        w_count = cy_popcount_board(w_pawns & (0x0101010101010101ULL << f))
+        if w_count > 1:
+            mg += (w_count - 1) * -15
+            eg += (w_count - 1) * -15
+        
+        # Black doubled pawns
+        b_count = cy_popcount_board(b_pawns & (0x0101010101010101ULL << f))
+        if b_count > 1:
+            mg -= (b_count - 1) * -15
+            eg -= (b_count - 1) * -15
+
+    # 2. Passed & Isolated Pawns
+    # White Pawns
+    bb = w_pawns
+    while bb:
+        sq_idx = _cy_lsb_impl(bb)
+        bb = bb & ~(<unsigned long long>1 << sq_idx)
+        r = sq_idx >> 3
+        f = sq_idx & 7
+
+        # Isolated pawn detection
+        if (w_pawns & _ADJACENT_FILES_MASK[f]) == 0:
+            mg -= 15
+            eg -= 15
+
+        # Passed pawn detection
+        if (b_pawns & _PASSED_PAWN_MASK_W[sq_idx]) == 0:
+            mg += passed_pawn_mg[r]
+            eg += passed_pawn_eg[r]
+
+    # Black Pawns
+    bb = b_pawns
+    while bb:
+        sq_idx = _cy_lsb_impl(bb)
+        bb = bb & ~(<unsigned long long>1 << sq_idx)
+        r = sq_idx >> 3
+        f = sq_idx & 7
+
+        # Isolated pawn detection
+        if (b_pawns & _ADJACENT_FILES_MASK[f]) == 0:
+            mg += 15
+            eg += 15
+
+        # Passed pawn detection
+        if (w_pawns & _PASSED_PAWN_MASK_B[sq_idx]) == 0:
+            mg -= passed_pawn_mg[7 - r]
+            eg -= passed_pawn_eg[7 - r]
+
+    mg_score[0] += mg
+    eg_score[0] += eg
+
+cdef void cy_evaluate_king_safety(CustomBitboardBoard board, int *mg_score, int *eg_score) noexcept nogil:
+    cdef int sq_idx, r, f, file_idx
+    cdef int w_ks_penalty = 0
+    cdef int b_ks_penalty = 0
+
+    # White King Safety
+    if board._bb[P_K]:
+        sq_idx = _cy_lsb_impl(board._bb[P_K])
+        r = sq_idx >> 3
+        f = sq_idx & 7
+        
+        if r == 0:
+            if f == 6 or f == 7: # King side (G1/H1)
+                for file_idx in range(5, 8):
+                    if (board._bb[P_P] & (<unsigned long long>1 << (8 + file_idx))) != 0:
+                        pass
+                    elif (board._bb[P_P] & (<unsigned long long>1 << (16 + file_idx))) != 0:
+                        w_ks_penalty += 10
+                    else:
+                        w_ks_penalty += 25
+            elif f == 1 or f == 2: # Queen side (B1/C1)
+                for file_idx in range(0, 3):
+                    if (board._bb[P_P] & (<unsigned long long>1 << (8 + file_idx))) != 0:
+                        pass
+                    elif (board._bb[P_P] & (<unsigned long long>1 << (16 + file_idx))) != 0:
+                        w_ks_penalty += 10
+                    else:
+                        w_ks_penalty += 25
+
+    # Black King Safety
+    if board._bb[P_k]:
+        sq_idx = _cy_lsb_impl(board._bb[P_k])
+        r = sq_idx >> 3
+        f = sq_idx & 7
+
+        if r == 7:
+            if f == 6 or f == 7: # King side (G8/H8)
+                for file_idx in range(5, 8):
+                    if (board._bb[P_p] & (<unsigned long long>1 << (48 + file_idx))) != 0:
+                        pass
+                    elif (board._bb[P_p] & (<unsigned long long>1 << (40 + file_idx))) != 0:
+                        b_ks_penalty += 10
+                    else:
+                        b_ks_penalty += 25
+            elif f == 1 or f == 2: # Queen side (B8/C8)
+                for file_idx in range(0, 3):
+                    if (board._bb[P_p] & (<unsigned long long>1 << (48 + file_idx))) != 0:
+                        pass
+                    elif (board._bb[P_p] & (<unsigned long long>1 << (40 + file_idx))) != 0:
+                        b_ks_penalty += 10
+                    else:
+                        b_ks_penalty += 25
+
+    mg_score[0] -= w_ks_penalty
+    mg_score[0] += b_ks_penalty
+
+cdef void cy_get_evaluation_bonuses(CustomBitboardBoard board, int *mg_score, int *eg_score) noexcept nogil:
+    cdef int mg = 0
+    cdef int eg = 0
+    
+    # 1. Bishop Pair Bonus (30 cp MG, 50 cp EG)
+    cdef int w_bishops = cy_popcount_board(board._bb[P_B])
+    cdef int b_bishops = cy_popcount_board(board._bb[P_b])
+    if w_bishops >= 2:
+        mg += 30
+        eg += 50
+    if b_bishops >= 2:
+        mg -= 30
+        eg -= 50
+        
+    # 2. Piece Mobility Bonuses (3 cp per mobile square)
+    cdef unsigned long long friendly_occ_w = board._occ[WHITE]
+    cdef unsigned long long friendly_occ_b = board._occ[BLACK]
+    cdef unsigned long long both_occ = board._occ[2]
+    
+    cdef int sq_idx
+    cdef unsigned long long bb, attacks
+    cdef int mobility
+    
+    # Knights (White)
+    bb = board._bb[P_N]
+    while bb:
+        sq_idx = _cy_lsb_impl(bb)
+        bb = bb & ~(<unsigned long long>1 << sq_idx)
+        attacks = _KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_w
+        mobility = cy_popcount_board(attacks)
+        mg += mobility * 3
+        eg += mobility * 3
+        
+    # Knights (Black)
+    bb = board._bb[P_n]
+    while bb:
+        sq_idx = _cy_lsb_impl(bb)
+        bb = bb & ~(<unsigned long long>1 << sq_idx)
+        attacks = _KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_b
+        mobility = cy_popcount_board(attacks)
+        mg -= mobility * 3
+        eg -= mobility * 3
+
+    # Bishops (White)
+    bb = board._bb[P_B]
+    while bb:
+        sq_idx = _cy_lsb_impl(bb)
+        bb = bb & ~(<unsigned long long>1 << sq_idx)
+        attacks = cy_get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_w
+        mobility = cy_popcount_board(attacks)
+        mg += mobility * 3
+        eg += mobility * 3
+
+    # Bishops (Black)
+    bb = board._bb[P_b]
+    while bb:
+        sq_idx = _cy_lsb_impl(bb)
+        bb = bb & ~(<unsigned long long>1 << sq_idx)
+        attacks = cy_get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_b
+        mobility = cy_popcount_board(attacks)
+        mg -= mobility * 3
+        eg -= mobility * 3
+
+    # Rooks (White)
+    bb = board._bb[P_R]
+    while bb:
+        sq_idx = _cy_lsb_impl(bb)
+        bb = bb & ~(<unsigned long long>1 << sq_idx)
+        attacks = cy_get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_w
+        mobility = cy_popcount_board(attacks)
+        mg += mobility * 3
+        eg += mobility * 3
+
+    # Rooks (Black)
+    bb = board._bb[P_r]
+    while bb:
+        sq_idx = _cy_lsb_impl(bb)
+        bb = bb & ~(<unsigned long long>1 << sq_idx)
+        attacks = cy_get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_b
+        mobility = cy_popcount_board(attacks)
+        mg -= mobility * 3
+        eg -= mobility * 3
+
+    # Queens (White)
+    bb = board._bb[P_Q]
+    while bb:
+        sq_idx = _cy_lsb_impl(bb)
+        bb = bb & ~(<unsigned long long>1 << sq_idx)
+        attacks = cy_get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_w
+        mobility = cy_popcount_board(attacks)
+        mg += mobility * 3
+        eg += mobility * 3
+
+    # Queens (Black)
+    bb = board._bb[P_q]
+    while bb:
+        sq_idx = _cy_lsb_impl(bb)
+        bb = bb & ~(<unsigned long long>1 << sq_idx)
+        attacks = cy_get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_b
+        mobility = cy_popcount_board(attacks)
+        mg -= mobility * 3
+        eg -= mobility * 3
+        
+    # 3. Pawn structure evaluations
+    cy_evaluate_pawns(board, &mg, &eg)
+
+    # 4. King safety evaluations
+    cy_evaluate_king_safety(board, &mg, &eg)
+
+    mg_score[0] = mg
+    eg_score[0] = eg
+
+
+def cy_evaluate(CustomBitboardBoard board):
+    cdef int mg_bonus = 0
+    cdef int eg_bonus = 0
+    cy_get_evaluation_bonuses(board, &mg_bonus, &eg_bonus)
+    
+    cdef int phase = board.phase
+    if phase > 24:
+        phase = 24
+        
+    return <int>(((board.score_mg + mg_bonus) * phase + (board.score_eg + eg_bonus) * (24 - phase)) / 24)
+

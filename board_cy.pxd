@@ -60,3 +60,8 @@ cdef public unsigned long long ZOBRIST_PIECES[12][64]
 cdef public unsigned long long ZOBRIST_CASTLING[16]
 cdef public unsigned long long ZOBRIST_EP[8]
 cdef public unsigned long long ZOBRIST_SIDE
+
+cdef void cy_evaluate_pawns(CustomBitboardBoard board, int *mg_score, int *eg_score) noexcept nogil
+cdef void cy_evaluate_king_safety(CustomBitboardBoard board, int *mg_score, int *eg_score) noexcept nogil
+cdef void cy_get_evaluation_bonuses(CustomBitboardBoard board, int *mg_score, int *eg_score) noexcept nogil
+

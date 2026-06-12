@@ -37,6 +37,7 @@ from board_cy cimport (
     ZOBRIST_CASTLING,
     ZOBRIST_EP,
     ZOBRIST_SIDE,
+    cy_get_evaluation_bonuses,
 )
 
 # --- Constants ---
@@ -924,7 +925,7 @@ cdef int negamax_copymake(
                 
                 p_type = child_state.piece_map[to_sq] # the piece is already moved to to_sq
                 if p_type != -1:
-                    if history_moves[p_type][to_sq] > 2000:
+                    if history_moves[p_type][to_sq] > 3000:
                         r_int -= 1
                     elif history_moves[p_type][to_sq] < 500:
                         r_int += 1
@@ -1204,7 +1205,10 @@ cdef int evaluate(CustomBitboardBoard board) nogil:
     cdef int phase = board.phase
     if phase > 24:
         phase = 24
-    return <int>((board.score_mg * phase + board.score_eg * (24 - phase)) / 24)
+    cdef int bonus_mg = 0
+    cdef int bonus_eg = 0
+    cy_get_evaluation_bonuses(board, &bonus_mg, &bonus_eg)
+    return <int>(((board.score_mg + bonus_mg) * phase + (board.score_eg + bonus_eg) * (24 - phase)) / 24)
 
 
 # --- MVV-LVA Scoring ---
@@ -1473,7 +1477,7 @@ cdef int negamax(
                 
                 p_type = board.piece_map[to_sq] # the piece is already moved to to_sq
                 if p_type != -1:
-                    if history_moves[p_type][to_sq] > 2000:
+                    if history_moves[p_type][to_sq] > 3000:
                         r_int -= 1
                     elif history_moves[p_type][to_sq] < 500:
                         r_int += 1
@@ -1582,7 +1586,7 @@ def get_best_move_cy(
 
     memset(killer_moves, 0, sizeof(killer_moves))
     memset(history_moves, 0, sizeof(history_moves))
-    memset(counter_moves, 0, sizeof(counter_moves))
+    memset(counter_moves, -1, sizeof(counter_moves))
 
     cdef CMoveList legal_moves
     legal_moves.count = 0
@@ -1644,6 +1648,7 @@ def get_best_move_cy(
             if search_mode == 1:
                 negamax_copymake(&root_state, depth, -INFINITE, INFINITE, color, 0, 0, -1, board, search_history, root_history_len)
             else:
+                load_state_to_shell(&root_state, board)
                 negamax(board, depth, -INFINITE, INFINITE, color, 0, 0, -1, search_history, root_history_len)
             idx = key & (TT_SIZE - 1)
             entry = &_tt[idx]
@@ -1660,6 +1665,7 @@ def get_best_move_cy(
                 if search_mode == 1:
                     score = negamax_copymake(&root_state, depth, alpha_aw, beta_aw, color, 0, 0, -1, board, search_history, root_history_len)
                 else:
+                    load_state_to_shell(&root_state, board)
                     score = negamax(board, depth, alpha_aw, beta_aw, color, 0, 0, -1, search_history, root_history_len)
                 
                 if info.stop:
