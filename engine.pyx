@@ -38,6 +38,7 @@ from board_cy cimport (
     ZOBRIST_EP,
     ZOBRIST_SIDE,
     cy_get_evaluation_bonuses,
+    cy_is_square_attacked,
 )
 
 # --- Constants ---
@@ -388,6 +389,8 @@ cdef void init_lmr_reductions() noexcept:
                 LMR_REDUCTIONS[depth][move_count] = <int>(0.5 + log(depth) * log(move_count) / 1.95 * 1024)
 
 cdef bint has_sufficient_material_bb(unsigned long long *bitboards) noexcept nogil:
+    cdef int w_knights, b_knights, w_bishops, b_bishops, total_pieces, w_sq, b_sq
+    
     # Pawns
     if bitboards[0] != 0 or bitboards[6] != 0:
         return True
@@ -398,12 +401,12 @@ cdef bint has_sufficient_material_bb(unsigned long long *bitboards) noexcept nog
     if bitboards[4] != 0 or bitboards[10] != 0:
         return True
         
-    cdef int w_knights = cy_popcount(bitboards[1])
-    cdef int b_knights = cy_popcount(bitboards[7])
-    cdef int w_bishops = cy_popcount(bitboards[2])
-    cdef int b_bishops = cy_popcount(bitboards[8])
+    w_knights = cy_popcount(bitboards[1])
+    b_knights = cy_popcount(bitboards[7])
+    w_bishops = cy_popcount(bitboards[2])
+    b_bishops = cy_popcount(bitboards[8])
     
-    cdef int total_pieces = w_knights + b_knights + w_bishops + b_bishops
+    total_pieces = w_knights + b_knights + w_bishops + b_bishops
     
     if total_pieces == 0:
         return False
@@ -412,7 +415,9 @@ cdef bint has_sufficient_material_bb(unsigned long long *bitboards) noexcept nog
         return False
         
     if w_bishops == 1 and b_bishops == 1 and w_knights == 0 and b_knights == 0:
-        if ( (cy_lsb(bitboards[2]) // 8 + cy_lsb(bitboards[2]) % 8) % 2 ) == ( (cy_lsb(bitboards[8]) // 8 + cy_lsb(bitboards[8]) % 8) % 2 ):
+        w_sq = cy_lsb(bitboards[2])
+        b_sq = cy_lsb(bitboards[8])
+        if (((w_sq >> 3) ^ (w_sq & 7)) & 1) == (((b_sq >> 3) ^ (b_sq & 7)) & 1):
             return False
             
     return True
@@ -1252,12 +1257,8 @@ cdef bint is_state_legal(CGameState *state, CustomBitboardBoard shell, int side_
     if king_sq == -1:
         return True
     
-    # Load ONLY necessary parts of state into shell board to check attacks (is_square_attacked_c only needs _bb and _occ[2])
-    memcpy(shell._bb,       state.bitboards,    12 * sizeof(unsigned long long))
-    shell._occ[2] = state.occupancies[2]
-    
     cdef int opponent = BLACK if side_that_moved == WHITE else WHITE
-    return not shell.is_square_attacked_c(king_sq, opponent)
+    return not cy_is_square_attacked(state.bitboards, state.occupancies[2], king_sq, opponent)
 
 def clear_tt():
     """Clears the Transposition Table memory."""

@@ -45,6 +45,7 @@ cdef class CustomBitboardBoard:
     cdef bint is_square_attacked_c(self, int sq, int attacker_color) noexcept nogil
     cdef bint in_check_c(self) noexcept nogil
     cdef bint make_null_move_c(self) noexcept nogil
+    cdef long long _run_perft_recursive_c(self, int depth) noexcept nogil
 
     cpdef object get_piece_at(self, int square)
     cpdef bint is_square_attacked(self, int sq, int attacker_color)
@@ -64,4 +65,6 @@ cdef public unsigned long long ZOBRIST_SIDE
 cdef void cy_evaluate_pawns(CustomBitboardBoard board, int *mg_score, int *eg_score) noexcept nogil
 cdef void cy_evaluate_king_safety(CustomBitboardBoard board, int *mg_score, int *eg_score) noexcept nogil
 cdef void cy_get_evaluation_bonuses(CustomBitboardBoard board, int *mg_score, int *eg_score) noexcept nogil
+
+cdef bint cy_is_square_attacked(unsigned long long *bb, unsigned long long occupancy, int sq, int attacker_color) noexcept nogil
 

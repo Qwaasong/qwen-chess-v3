@@ -22,14 +22,29 @@ cdef extern from *:
         _BitScanForward64(&idx, bb);
         return (int)idx;
     }
+    #if defined(_M_AMD64) || defined(_M_ARM64)
+    static __forceinline int _cy_popcount_impl(unsigned long long bb) {
+        return (int)__popcnt64(bb);
+    }
+    #else
+    static __forceinline int _cy_popcount_impl(unsigned long long bb) {
+        bb = bb - ((bb >> 1) & 0x5555555555555555ULL);
+        bb = (bb & 0x3333333333333333ULL) + ((bb >> 2) & 0x3333333333333333ULL);
+        return (int)((((bb + (bb >> 4)) & 0xF0F0F0F0F0F0F0FULL) * 0x101010101010101ULL) >> 56);
+    }
+    #endif
     #else
     static __inline__ int _cy_lsb_impl(unsigned long long bb) {
         if (!bb) return -1;
         return __builtin_ctzll(bb);
     }
+    static __inline__ int _cy_popcount_impl(unsigned long long bb) {
+        return __builtin_popcountll(bb);
+    }
     #endif
     """
     int _cy_lsb_impl(unsigned long long bb) nogil
+    int _cy_popcount_impl(unsigned long long bb) nogil
 
 # ---------------------------------------------------------------------------
 # Constants for square indices (A1=0 ... H8=63)
@@ -723,13 +738,8 @@ cdef void init_board_piece_values() noexcept:
 init_board_piece_values()
 
 # Helper popcount for initialization phase counting
-cdef int cy_popcount_board(unsigned long long x) noexcept nogil:
-    # Inline Kernighan's method or builtin
-    cdef int count = 0
-    while x:
-        x &= x - 1
-        count += 1
-    return count
+cdef inline int cy_popcount_board(unsigned long long x) noexcept nogil:
+    return _cy_popcount_impl(x)
 
 cdef void recompute_board_eval(CustomBitboardBoard board) noexcept nogil:
     cdef int knights = cy_popcount_board(board._bb[P_N]) + cy_popcount_board(board._bb[P_n])
@@ -849,6 +859,36 @@ cdef inline void cy_add_move(CMoveList *ml, int m) noexcept nogil:
     ml.count += 1
 
 # ---------------------------------------------------------------------------
+cdef bint cy_is_square_attacked(unsigned long long *bb, unsigned long long occupancy, int sq, int attacker_color) noexcept nogil:
+    cdef unsigned long long pawn_bb, knight_bb, king_bb, bq_bb, rq_bb
+    cdef int friendly_offset
+
+    # 1. Pawn attacks
+    if attacker_color == 0:
+        if _PAWN_ATTACKS_B[sq] & bb[0]: return True
+    else:
+        if _PAWN_ATTACKS_W[sq] & bb[6]: return True
+
+    # 2. Knight attacks
+    knight_bb = bb[1 if attacker_color == 0 else 7]
+    if _KNIGHT_ATTACKS[sq] & knight_bb: return True
+
+    # 3. King attacks
+    king_bb = bb[5 if attacker_color == 0 else 11]
+    if _KING_ATTACKS[sq] & king_bb: return True
+
+    # 4. Bishop / Queen (diagonals)
+    friendly_offset = 0 if attacker_color == 0 else 6
+    bq_bb = bb[2 + friendly_offset] | bb[4 + friendly_offset]
+    if cy_get_bishop_attacks(sq, occupancy) & bq_bb: return True
+
+    # 5. Rook / Queen (orthogonals)
+    rq_bb = bb[3 + friendly_offset] | bb[4 + friendly_offset]
+    if cy_get_rook_attacks(sq, occupancy) & rq_bb: return True
+
+    return False
+
+# ---------------------------------------------------------------------------
 # CustomBitboardBoard — main board class
 # ---------------------------------------------------------------------------
 cdef class CustomBitboardBoard:
@@ -944,38 +984,7 @@ cdef class CustomBitboardBoard:
 
     cdef bint is_square_attacked_c(self, int sq, int attacker_color) noexcept nogil:
         """Returns True if sq is attacked by any piece of attacker_color (C-only)."""
-        cdef unsigned long long occupancy = self._occ[2]
-        cdef unsigned long long pawn_bb, knight_bb, king_bb, bq_bb, rq_bb
-        cdef int f = sq % 8, friendly_offset
-
-        # 1. Pawn attacks
-        if attacker_color == WHITE:
-            pawn_bb = self._bb[P_P]
-            if f > 0 and sq - 9 >= 0 and cy_get_bit(pawn_bb, sq - 9): return True
-            if f < 7 and sq - 7 >= 0 and cy_get_bit(pawn_bb, sq - 7): return True
-        else:
-            pawn_bb = self._bb[P_p]
-            if f > 0 and sq + 7 < 64 and cy_get_bit(pawn_bb, sq + 7): return True
-            if f < 7 and sq + 9 < 64 and cy_get_bit(pawn_bb, sq + 9): return True
-
-        # 2. Knight attacks
-        knight_bb = self._bb[P_N if attacker_color == WHITE else P_n]
-        if _KNIGHT_ATTACKS[sq] & knight_bb: return True
-
-        # 3. King attacks
-        king_bb = self._bb[P_K if attacker_color == WHITE else P_k]
-        if _KING_ATTACKS[sq] & king_bb: return True
-
-        # 4. Bishop / Queen (diagonals)
-        friendly_offset = 0 if attacker_color == WHITE else 6
-        bq_bb = self._bb[P_B + friendly_offset] | self._bb[P_Q + friendly_offset]
-        if cy_get_bishop_attacks(sq, occupancy) & bq_bb: return True
-
-        # 5. Rook / Queen (orthogonals)
-        rq_bb = self._bb[P_R + friendly_offset] | self._bb[P_Q + friendly_offset]
-        if cy_get_rook_attacks(sq, occupancy) & rq_bb: return True
-
-        return False
+        return cy_is_square_attacked(self._bb, self._occ[2], sq, attacker_color)
 
     cpdef bint is_square_attacked(self, int sq, int attacker_color):
         """Returns True if sq is attacked by any piece of attacker_color (Python wrapper)."""
@@ -987,7 +996,7 @@ cdef class CustomBitboardBoard:
         cdef int king_sq = cy_lsb(king_bb)
         if king_sq == -1:
             return False
-        return self.is_square_attacked_c(king_sq, BLACK if self.side_to_move == WHITE else WHITE)
+        return cy_is_square_attacked(self._bb, self._occ[2], king_sq, BLACK if self.side_to_move == WHITE else WHITE)
 
     cpdef bint in_check(self):
         """Returns True if the side to move's king is in check (Python wrapper)."""
@@ -1016,8 +1025,8 @@ cdef class CustomBitboardBoard:
         while pawn_sqs:
             from_sq = cy_lsb(pawn_sqs)
             pawn_sqs = cy_clear_bit(pawn_sqs, from_sq)
-            r = from_sq // 8
-            f = from_sq % 8
+            r = from_sq >> 3
+            f = from_sq & 7
 
             if side == WHITE:
                 to_sq = from_sq + 8
@@ -1215,8 +1224,8 @@ cdef class CustomBitboardBoard:
         while pawn_sqs:
             from_sq = cy_lsb(pawn_sqs)
             pawn_sqs = cy_clear_bit(pawn_sqs, from_sq)
-            r = from_sq // 8
-            f = from_sq % 8
+            r = from_sq >> 3
+            f = from_sq & 7
 
             if side == WHITE:
                 # Promotion without capture
@@ -1368,7 +1377,7 @@ cdef class CustomBitboardBoard:
         while pawn_sqs:
             from_sq = cy_lsb(pawn_sqs)
             pawn_sqs = cy_clear_bit(pawn_sqs, from_sq)
-            r = from_sq // 8
+            r = from_sq >> 3
 
             if side == WHITE:
                 if r < 6: # promotions are handled in captures
@@ -1836,8 +1845,7 @@ cdef class CustomBitboardBoard:
         """Exposes history depth for compatibility (read-only)."""
         return list(range(self._history_len))  # length proxy, not the real structs
 
-    cpdef long long run_perft_recursive(self, int depth):
-        """Runs perft recursion fully in Cython."""
+    cdef long long _run_perft_recursive_c(self, int depth) noexcept nogil:
         cdef CMoveList moves
         moves.count = 0
         self._generate_pseudo_legal_moves_c(&moves)
@@ -1855,9 +1863,13 @@ cdef class CustomBitboardBoard:
         for i in range(moves.count):
             m = moves.moves[i]
             if self.make_move_c(m):
-                nodes += self.run_perft_recursive(depth - 1)
+                nodes += self._run_perft_recursive_c(depth - 1)
             self.unmake_move_c()
         return nodes
+
+    cpdef long long run_perft_recursive(self, int depth):
+        """Runs perft recursion fully in Cython."""
+        return self._run_perft_recursive_c(depth)
 
 cdef void cy_evaluate_pawns(CustomBitboardBoard board, int *mg_score, int *eg_score) noexcept nogil:
     cdef int mg = 0
