@@ -25,9 +25,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 ENGINES = {
     "Baseline": os.path.join(BASE_DIR, "baseline"), # Saved baseline engine
-    "Agent-A":  os.path.join(BASE_DIR, "agent_a_spsa"),
-    "Agent-B":  os.path.join(BASE_DIR, "agent_b_timemgmt"),
-    "Agent-C":  os.path.join(BASE_DIR, "agent_c_qsearch"),
+    "New-Engine": BASE_DIR,                         # Engine with CONSTANT.md parameters
 }
 
 # --- Tournament Parameters ---
