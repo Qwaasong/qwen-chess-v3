@@ -538,6 +538,44 @@ def get_mvv_lva_score(board: CustomBitboardBoard, move: int) -> int:
     return score
 
 
+# Piece values for SEE (simpler, material-only)
+SEE_VALUES = [100, 320, 330, 500, 900, 20000, 0]  # P, N, B, R, Q, K, none
+
+# Delta pruning margin — captures below this gain threshold are pruned
+DELTA_MARGIN = 200  # ~2 pawns
+
+
+def static_exchange_evaluation(
+    board: CustomBitboardBoard, move: int
+) -> int:
+    """Estimate the material exchange value of a capture move.
+
+    Returns positive if the capture is winning, negative if losing.
+    This is a simplified 1-ply SEE: gain = captured_value - attacker_value.
+    A full recursive SEE would be more accurate but costlier.
+    """
+    to_sq = get_move_dest(move)
+    from_sq = get_move_source(move)
+    flag = get_move_flag(move)
+
+    # Determine the value of the captured piece
+    if flag == FLAG_EP:
+        captured_val = SEE_VALUES[0]  # en-passant always captures a pawn
+    else:
+        victim = board.get_piece_at(to_sq)
+        if victim is None:
+            return 0
+        captured_val = SEE_VALUES[victim % 6]
+
+    attacker = board.get_piece_at(from_sq)
+    if attacker is None:
+        return 0
+    attacker_val = SEE_VALUES[attacker % 6]
+
+    # Simplified SEE: how much we gain net of the attacker being recaptured
+    return captured_val - attacker_val
+
+
 # --- Quiescence Search ---
 def quiescence(
     board: CustomBitboardBoard,
@@ -547,22 +585,46 @@ def quiescence(
     ply: int,
     qdepth: int = 0,
 ) -> int:
-    """Quiescence search to avoid horizon effect on captures and checks."""
+    """Enhanced quiescence search with delta pruning and SEE filtering.
+
+    Improvements over the basic version:
+    - Delta pruning: skips the node entirely when even capturing the best
+      possible piece (queen) plus the margin cannot raise alpha.
+    - Per-move SEE filtering: skips clearly losing captures (SEE < -50).
+    - Per-move delta pruning: skips captures whose gain + margin <= alpha.
+    - Hard depth cap at qdepth 8 to guard against pathological loops.
+    """
     info.nodes += 1
 
     in_check = board.in_check()
     stand_pat = 0
+
     if not in_check:
         stand_pat = color * evaluate(board)
+
+        # Beta cutoff: stand-pat score already beats beta
         if stand_pat >= beta:
             return beta
+
+        # Delta pruning: if even capturing the most valuable piece possible
+        # cannot push the score above alpha, there is nothing to gain here.
+        # Only apply after the first ply so we don't prune root captures.
+        best_possible_gain = stand_pat + DELTA_MARGIN + SEE_VALUES[4]  # queen
+        if best_possible_gain <= alpha and qdepth > 0:
+            return alpha
+
         alpha = max(alpha, stand_pat)
+
+    # Hard recursion cap — prevents infinite loops in exotic positions
+    if qdepth >= 8:
+        return stand_pat if not in_check else color * evaluate(board)
 
     pseudo_moves = board.generate_pseudo_legal_moves()
     moves_to_search = []
     legal_moves_searched = 0
 
     if in_check:
+        # In check: consider ALL moves with captures/promotions ranked first
         for move in pseudo_moves:
             score = get_mvv_lva_score(board, move)
             to_sq = get_move_dest(move)
@@ -580,16 +642,22 @@ def quiescence(
             is_cap = flag == FLAG_EP or (board.get_piece_at(to_sq) is not None)
 
             if is_cap:
+                # Skip clearly losing captures via SEE
+                see_val = static_exchange_evaluation(board, move)
+                if see_val < -50:
+                    continue
+
+                # Per-move delta pruning: skip if this capture cannot
+                # raise alpha even with the positional margin
+                if see_val + stand_pat + DELTA_MARGIN <= alpha and qdepth > 0:
+                    continue
+
                 score = get_mvv_lva_score(board, move)
                 moves_to_search.append((score, move))
-            elif qdepth < 1:
-                if not board.make_move(move):
-                    board.unmake_move()
-                    continue
-                gives_check = board.in_check()
-                board.unmake_move()
-                if gives_check:
-                    moves_to_search.append((0, move))
+            elif flag >= FLAG_PROMOTE_N:
+                # Always consider promotions — they can change material significantly
+                score = 9000 + PIECE_VALUES[0]
+                moves_to_search.append((score, move))
 
     moves_to_search.sort(key=lambda x: x[0], reverse=True)
 

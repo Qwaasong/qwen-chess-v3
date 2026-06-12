@@ -386,7 +386,7 @@ cdef void init_lmr_reductions() noexcept:
             if depth == 0 or move_count == 0:
                 LMR_REDUCTIONS[depth][move_count] = 0
             else:
-                LMR_REDUCTIONS[depth][move_count] = <int>(0.5 + log(depth) * log(move_count) / 1.95 * 1024)
+                LMR_REDUCTIONS[depth][move_count] = <int>(0.5 + log(depth) * log(move_count) / 1.85 * 1024)
 
 cdef bint has_sufficient_material_bb(unsigned long long *bitboards) noexcept nogil:
     cdef int w_knights, b_knights, w_bishops, b_bishops, total_pieces, w_sq, b_sq
@@ -1040,8 +1040,8 @@ cdef int negamax_copymake(
                 p_type = state.piece_map[from_sq]
                 if p_type != -1:
                     history_moves[p_type][to_sq] += depth * depth
-                    if history_moves[p_type][to_sq] > 5000:
-                        history_moves[p_type][to_sq] = 5000
+                    if history_moves[p_type][to_sq] > 8000:
+                        history_moves[p_type][to_sq] = 8000
 
                 # Countermove update
                 if prev_move != -1:
@@ -1590,8 +1590,8 @@ cdef int negamax(
                 p_type = board.piece_map[from_sq]
                 if p_type != -1:
                     history_moves[p_type][to_sq] += depth * depth
-                    if history_moves[p_type][to_sq] > 5000:
-                        history_moves[p_type][to_sq] = 5000
+                    if history_moves[p_type][to_sq] > 8000:
+                        history_moves[p_type][to_sq] = 8000
 
                 # Countermove update
                 if prev_move != -1:

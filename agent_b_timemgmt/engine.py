@@ -884,22 +884,102 @@ def negamax(
 
 
 
+# --- Time Manager ---
+class TimeManager:
+    """Manages dynamic time allocation based on game phase and position complexity."""
+
+    # Phase constants
+    PHASE_OPENING = 0
+    PHASE_MIDGAME = 1
+    PHASE_ENDGAME = 2
+
+    def __init__(self) -> None:
+        self.moves_played = 0
+        self.game_phase = self.PHASE_OPENING
+
+    def get_phase(self, board: CustomBitboardBoard) -> int:
+        """Determine game phase from material count."""
+        knights = (
+            board.bitboards[1].bit_count() + board.bitboards[7].bit_count()
+        )
+        bishops = (
+            board.bitboards[2].bit_count() + board.bitboards[8].bit_count()
+        )
+        rooks = (
+            board.bitboards[3].bit_count() + board.bitboards[9].bit_count()
+        )
+        queens = (
+            board.bitboards[4].bit_count() + board.bitboards[10].bit_count()
+        )
+        phase_val = knights + bishops + rooks * 2 + queens * 4
+        if phase_val >= 20:
+            return self.PHASE_OPENING
+        elif phase_val >= 10:
+            return self.PHASE_MIDGAME
+        else:
+            return self.PHASE_ENDGAME
+
+    def compute_time(
+        self,
+        board: CustomBitboardBoard,
+        base_time: float,
+        remaining_time: float = 0.0,
+        increment: float = 0.0,
+    ) -> float:
+        """Compute allocated time for this move."""
+        phase = self.get_phase(board)
+
+        # Base time multiplier by phase
+        if phase == self.PHASE_OPENING:
+            multiplier = 0.8  # Opening: use less time, mostly book/theory
+        elif phase == self.PHASE_MIDGAME:
+            multiplier = 1.2  # Midgame: use more time for critical decisions
+        else:
+            multiplier = 1.0  # Endgame: normal
+
+        allocated = base_time * multiplier
+
+        # If we have remaining time info, adjust based on time pressure
+        if remaining_time > 0:
+            # Panic mode: if less than 5 seconds left, use only 15% of remaining
+            if remaining_time < 5.0:
+                allocated = min(allocated, remaining_time * 0.15)
+            # Safety cap: never use more than 10% of remaining time
+            safety_cap = remaining_time * 0.10 + increment * 0.8
+            allocated = min(allocated, safety_cap)
+
+        # Min/max guardrails
+        allocated = max(allocated, 0.01)   # At least 10ms
+        allocated = min(allocated, 10.0)   # At most 10 seconds
+
+        return allocated
+
+
+time_manager = TimeManager()
+
+
 # --- Main Engine API ---
 def get_best_move(
     chess_board: chess.Board,
     time_limit: float = 1.0,
     depth_limit: int = 0,
     print_info: bool = False,
+    remaining_time: float = 0.0,
+    increment: float = 0.0,
 ) -> chess.Move | None:
     """Finds the best move using iterative deepening search."""
-    # 2. Setup Search state
+    # Setup Search state
     info.start_time = time.time()
-    info.time_limit = time_limit
     info.stop = False
     info.nodes = 0
 
-    # 3. Convert python-chess Board to CustomBitboardBoard
+    # Dynamic time management: compute effective time limit.
+    # We build the CustomBitboardBoard once and reuse it as the search board.
     board = CustomBitboardBoard.from_chess_board(chess_board)
+    effective_time = time_manager.compute_time(
+        board, time_limit, remaining_time, increment
+    )
+    info.time_limit = effective_time
 
     global killer_moves, history_moves, counter_moves
     killer_moves = [[0] * 64 for _ in range(2)]
@@ -971,9 +1051,21 @@ try:
         depth_limit: int = 0,
         print_info: bool = False,
         search_mode: int = 1,
+        remaining_time: float = 0.0,
+        increment: float = 0.0,
     ) -> chess.Move | None:
         info.root_ponder_move = -1
-        return _get_best_move_cy(chess_board, time_limit, depth_limit, print_info, search_mode)
+        board = CustomBitboardBoard.from_chess_board(chess_board)
+        effective_time = time_manager.compute_time(
+            board, time_limit, remaining_time, increment
+        )
+        return _get_best_move_cy(
+            chess_board,
+            effective_time,
+            depth_limit,
+            print_info,
+            search_mode,
+        )
 
     class CythonInfoWrapper:
         @property

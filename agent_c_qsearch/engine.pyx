@@ -536,6 +536,8 @@ cdef struct QMovePicker:
     bint in_check
     int qdepth
     CScoredMoveList moves
+    int alpha
+    int stand_pat
 
 cdef inline void init_move_picker(
     MovePicker *mp,
@@ -676,21 +678,61 @@ cdef int next_move(MovePicker *mp, CustomBitboardBoard board, int ply) noexcept 
         elif mp.stage == STAGE_DONE:
             return -1
 
+# Piece values for SEE (simpler, material-only)
+cdef int SEE_VALUES[7]
+# We must initialize it in a function or use inline assignment if allowed, but cdef array in Cython cannot be initialized directly like that. Let's do it in cdef inline void/int or static assignment.
+# Actually, we can define a cdef int get_see_value(int piece_type) noexcept nogil:
+cdef inline int get_see_value(int piece_type) noexcept nogil:
+    cdef int p = piece_type % 6
+    if p == 0: return 100   # Pawn
+    if p == 1: return 320   # Knight
+    if p == 2: return 330   # Bishop
+    if p == 3: return 500   # Rook
+    if p == 4: return 900   # Queen
+    if p == 5: return 20000 # King
+    return 0
+
+cdef int static_exchange_evaluation(CustomBitboardBoard board, int move) noexcept nogil:
+    cdef int to_sq = (move >> 6) & 0x3F
+    cdef int from_sq = move & 0x3F
+    cdef int flag = (move >> 12) & 0x0F
+
+    cdef int captured_val = 0
+    cdef int victim
+    if flag == 3:  # FLAG_EP = 3
+        captured_val = 100
+    else:
+        victim = board.piece_map[to_sq]
+        if victim == -1:
+            return 0
+        captured_val = get_see_value(victim)
+
+    cdef int attacker = board.piece_map[from_sq]
+    if attacker == -1:
+        return 0
+    cdef int attacker_val = get_see_value(attacker)
+
+    return captured_val - attacker_val
+
 cdef inline void init_qmove_picker(
     QMovePicker *qmp,
     bint in_check,
-    int qdepth
+    int qdepth,
+    int alpha,
+    int stand_pat
 ) noexcept nogil:
     qmp.stage = QSTAGE_GEN_CAPTURES
     qmp.index = 0
     qmp.in_check = in_check
     qmp.qdepth = qdepth
     qmp.moves.count = 0
+    qmp.alpha = alpha
+    qmp.stand_pat = stand_pat
 
 cdef int next_qmove(QMovePicker *qmp, CustomBitboardBoard board) noexcept nogil:
     cdef int move = -1
     cdef CMoveList raw_moves
-    cdef int i, score, to_sq, flag, is_cap
+    cdef int i, score, to_sq, flag, is_cap, see_val
     cdef bint gives_check
 
     while True:
@@ -717,11 +759,19 @@ cdef int next_qmove(QMovePicker *qmp, CustomBitboardBoard board) noexcept nogil:
             else:
                 raw_moves.count = 0
                 board._generate_captures_c(&raw_moves)
+                qmp.moves.count = 0
                 for i in range(raw_moves.count):
                     move = raw_moves.moves[i]
-                    qmp.moves.moves[i].move = move
-                    qmp.moves.moves[i].score = get_mvv_lva_score(board, move)
-                qmp.moves.count = raw_moves.count
+                    # SEE filtering: skip clearly losing captures (SEE < -50)
+                    see_val = static_exchange_evaluation(board, move)
+                    if see_val < -50:
+                        continue
+                    # Delta pruning per-move: skip if capture + delta + stand_pat <= alpha
+                    if see_val + qmp.stand_pat + 200 <= qmp.alpha and qmp.qdepth > 0:
+                        continue
+                    qmp.moves.moves[qmp.moves.count].move = move
+                    qmp.moves.moves[qmp.moves.count].score = get_mvv_lva_score(board, move)
+                    qmp.moves.count += 1
                 sort_moves(&qmp.moves)
 
         elif qmp.stage == QSTAGE_CAPTURES:
@@ -1323,15 +1373,26 @@ cdef int quiescence(
 
     cdef bint in_check = board.in_check_c()
     cdef int stand_pat = 0
+    cdef int DELTA_MARGIN = 200
+
     if not in_check:
         stand_pat = color * evaluate(board)
         if stand_pat >= beta:
             return beta
+        
+        # Delta pruning: if stand-pat + delta margin + Queen value (900) <= alpha, prune
+        if stand_pat + DELTA_MARGIN + 900 <= alpha and qdepth > 0:
+            return alpha
+
         if stand_pat > alpha:
             alpha = stand_pat
 
+    # Hard recursion cap — prevents infinite loops in exotic positions
+    if qdepth >= 8:
+        return stand_pat if not in_check else color * evaluate(board)
+
     cdef QMovePicker qmp
-    init_qmove_picker(&qmp, in_check, qdepth)
+    init_qmove_picker(&qmp, in_check, qdepth, alpha, stand_pat)
 
     cdef int move, val
     cdef int legal_moves_searched = 0

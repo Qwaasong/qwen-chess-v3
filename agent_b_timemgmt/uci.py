@@ -36,6 +36,8 @@ def search_task(
     chess_board: chess.Board,
     time_limit: float,
     depth_limit: Optional[int],
+    remaining_time: float = 0.0,
+    increment: float = 0.0,
 ) -> None:
     """Run search iteratively and print info to stdout.
 
@@ -48,6 +50,8 @@ def search_task(
         depth_limit=d_limit,
         print_info=True,
         search_mode=SEARCH_MODE,
+        remaining_time=remaining_time,
+        increment=increment,
     )
     
     # Retrieve ponder move if available from PV
@@ -255,9 +259,12 @@ def main() -> None:
                 else:
                     time_limit = 2.0
 
+            remaining = (wtime / 1000.0) if (wtime is not None and board.turn == chess.WHITE) else ((btime / 1000.0) if (btime is not None and board.turn == chess.BLACK) else 0.0)
+            increment = (winc / 1000.0) if (winc is not None and board.turn == chess.WHITE) else ((binc / 1000.0) if (binc is not None and board.turn == chess.BLACK) else 0.0)
+
             search_thread = threading.Thread(
                 target=search_task,
-                args=(board.copy(), time_limit, depth_limit),
+                args=(board.copy(), time_limit, depth_limit, remaining, increment),
             )
             search_thread.start()
 

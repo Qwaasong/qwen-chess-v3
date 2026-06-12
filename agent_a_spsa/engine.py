@@ -262,7 +262,7 @@ def init_lmr_reductions():
             if depth == 0 or move_count == 0:
                 LMR_REDUCTIONS[depth][move_count] = 0
             else:
-                LMR_REDUCTIONS[depth][move_count] = int(0.5 + math.log(depth) * math.log(move_count) / 1.95 * 1024)
+                LMR_REDUCTIONS[depth][move_count] = int(0.5 + math.log(depth) * math.log(move_count) / 1.85 * 1024)
 
 init_lmr_reductions()
 
@@ -410,8 +410,8 @@ def evaluate(board: CustomBitboardBoard) -> int:
             score_eg -= (b_count - 1) * -15
 
     # 4. Passed & Isolated Pawns
-    passed_pawn_mg = [0, 0, 5, 10, 20, 40, 80, 0]
-    passed_pawn_eg = [0, 0, 10, 20, 40, 80, 160, 0]
+    passed_pawn_mg = [0, 0, 10, 20, 35, 65, 120, 0]
+    passed_pawn_eg = [0, 0, 15, 35, 65, 115, 200, 0]
 
     # White Pawns
     bb = w_pawns
@@ -431,6 +431,20 @@ def evaluate(board: CustomBitboardBoard) -> int:
             score_mg += passed_pawn_mg[r]
             score_eg += passed_pawn_eg[r]
 
+        # Backward pawn
+        rank_mask = (1 << ((r + 1) * 8)) - 1
+        if (w_pawns & ADJACENT_FILES_MASK[f] & rank_mask) == 0:
+            if sq_idx + 8 < 64:
+                sq_ahead = sq_idx + 8
+                black_attacks = 0
+                if sq_ahead % 8 > 0:
+                    black_attacks |= (1 << (sq_ahead + 7))
+                if sq_ahead % 8 < 7:
+                    black_attacks |= (1 << (sq_ahead + 9))
+                if (b_pawns & black_attacks) != 0:
+                    score_mg -= 12
+                    score_eg -= 8
+
     # Black Pawns
     bb = b_pawns
     while bb:
@@ -449,6 +463,20 @@ def evaluate(board: CustomBitboardBoard) -> int:
             score_mg -= passed_pawn_mg[7 - r]
             score_eg -= passed_pawn_eg[7 - r]
 
+        # Backward pawn
+        rank_mask = ~((1 << (r * 8)) - 1) & 0xFFFFFFFFFFFFFFFF
+        if (b_pawns & ADJACENT_FILES_MASK[f] & rank_mask) == 0:
+            if sq_idx - 8 >= 0:
+                sq_ahead = sq_idx - 8
+                white_attacks = 0
+                if sq_ahead % 8 > 0:
+                    white_attacks |= (1 << (sq_ahead - 9))
+                if sq_ahead % 8 < 7:
+                    white_attacks |= (1 << (sq_ahead - 7))
+                if (w_pawns & white_attacks) != 0:
+                    score_mg += 12
+                    score_eg += 8
+
     # 5. King Safety (files g/h or b/c) on first rank (White) / eighth rank (Black)
     w_king_bb = board.bitboards[5] # P_K = 5
     if w_king_bb:
@@ -462,17 +490,17 @@ def evaluate(board: CustomBitboardBoard) -> int:
                     if (w_pawns & (1 << (8 + file_idx))):
                         pass
                     elif (w_pawns & (1 << (16 + file_idx))):
-                        w_ks_penalty += 10
+                        w_ks_penalty += 15
                     else:
-                        w_ks_penalty += 25
+                        w_ks_penalty += 35
             elif f == 1 or f == 2: # Queen side (B1/C1)
                 for file_idx in range(0, 3):
                     if (w_pawns & (1 << (8 + file_idx))):
                         pass
                     elif (w_pawns & (1 << (16 + file_idx))):
-                        w_ks_penalty += 10
+                        w_ks_penalty += 15
                     else:
-                        w_ks_penalty += 25
+                        w_ks_penalty += 35
             score_mg -= w_ks_penalty
 
     b_king_bb = board.bitboards[11] # P_k = 11
@@ -487,17 +515,17 @@ def evaluate(board: CustomBitboardBoard) -> int:
                     if (b_pawns & (1 << (48 + file_idx))):
                         pass
                     elif (b_pawns & (1 << (40 + file_idx))):
-                        b_ks_penalty += 10
+                        b_ks_penalty += 15
                     else:
-                        b_ks_penalty += 25
+                        b_ks_penalty += 35
             elif f == 1 or f == 2: # Queen side (B8/C8)
                 for file_idx in range(0, 3):
                     if (b_pawns & (1 << (48 + file_idx))):
                         pass
                     elif (b_pawns & (1 << (40 + file_idx))):
-                        b_ks_penalty += 10
+                        b_ks_penalty += 15
                     else:
-                        b_ks_penalty += 25
+                        b_ks_penalty += 35
             score_mg += b_ks_penalty
 
     # Interpolate between Middlegame and Endgame and return as C-like rounded integer
@@ -847,8 +875,8 @@ def negamax(
                 p_type = board.get_piece_at(from_sq)
                 if p_type is not None:
                     history_moves[p_type][to_sq] += depth * depth
-                    if history_moves[p_type][to_sq] > 5000:
-                        history_moves[p_type][to_sq] = 5000
+                    if history_moves[p_type][to_sq] > 8000:
+                        history_moves[p_type][to_sq] = 8000
                 
                 # Countermove update
                 if prev_move != -1:

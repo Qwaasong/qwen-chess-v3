@@ -1879,21 +1879,21 @@ cdef void cy_evaluate_pawns(CustomBitboardBoard board, int *mg_score, int *eg_sc
     cdef int passed_pawn_mg[8]
     passed_pawn_mg[0] = 0
     passed_pawn_mg[1] = 0
-    passed_pawn_mg[2] = 5
-    passed_pawn_mg[3] = 10
-    passed_pawn_mg[4] = 20
-    passed_pawn_mg[5] = 40
-    passed_pawn_mg[6] = 80
+    passed_pawn_mg[2] = 10
+    passed_pawn_mg[3] = 20
+    passed_pawn_mg[4] = 35
+    passed_pawn_mg[5] = 65
+    passed_pawn_mg[6] = 120
     passed_pawn_mg[7] = 0
 
     cdef int passed_pawn_eg[8]
     passed_pawn_eg[0] = 0
     passed_pawn_eg[1] = 0
-    passed_pawn_eg[2] = 10
-    passed_pawn_eg[3] = 20
-    passed_pawn_eg[4] = 40
-    passed_pawn_eg[5] = 80
-    passed_pawn_eg[6] = 160
+    passed_pawn_eg[2] = 15
+    passed_pawn_eg[3] = 35
+    passed_pawn_eg[4] = 65
+    passed_pawn_eg[5] = 115
+    passed_pawn_eg[6] = 200
     passed_pawn_eg[7] = 0
 
     cdef unsigned long long w_pawns = board._bb[P_P]
@@ -1965,8 +1965,8 @@ cdef void cy_evaluate_pawns(CustomBitboardBoard board, int *mg_score, int *eg_sc
         if (w_pawns & _ADJACENT_FILES_MASK[f] & rank_mask) == 0:
             if sq_idx + 8 < 64:
                 if (_PAWN_ATTACKS_B[sq_idx + 8] & b_pawns) != 0:
-                    mg -= 15
-                    eg -= 10
+                    mg -= 12
+                    eg -= 8
 
     # Black backward pawns
     bb = b_pawns
@@ -1980,8 +1980,8 @@ cdef void cy_evaluate_pawns(CustomBitboardBoard board, int *mg_score, int *eg_sc
         if (b_pawns & _ADJACENT_FILES_MASK[f] & rank_mask) == 0:
             if sq_idx - 8 >= 0:
                 if (_PAWN_ATTACKS_W[sq_idx - 8] & w_pawns) != 0:
-                    mg += 15
-                    eg += 10
+                    mg += 12
+                    eg += 8
 
     mg_score[0] += mg
     eg_score[0] += eg
@@ -2007,17 +2007,17 @@ cdef void cy_evaluate_king_safety(CustomBitboardBoard board, int *mg_score, int 
                     if (w_pawns & (<unsigned long long>1 << (8 + file_idx))) != 0:
                         pass
                     elif (w_pawns & (<unsigned long long>1 << (16 + file_idx))) != 0:
-                        w_ks_penalty += 10
+                        w_ks_penalty += 15
                     else:
-                        w_ks_penalty += 25
+                        w_ks_penalty += 35
             elif f <= 2: # Queen side (A1/B1/C1)
                 for file_idx in range(0, 3):
                     if (w_pawns & (<unsigned long long>1 << (8 + file_idx))) != 0:
                         pass
                     elif (w_pawns & (<unsigned long long>1 << (16 + file_idx))) != 0:
-                        w_ks_penalty += 10
+                        w_ks_penalty += 15
                     else:
-                        w_ks_penalty += 25
+                        w_ks_penalty += 35
 
         # 2. Open / Semi-open files near King
         if r <= 2:
@@ -2051,17 +2051,17 @@ cdef void cy_evaluate_king_safety(CustomBitboardBoard board, int *mg_score, int 
                     if (b_pawns & (<unsigned long long>1 << (48 + file_idx))) != 0:
                         pass
                     elif (b_pawns & (<unsigned long long>1 << (40 + file_idx))) != 0:
-                        b_ks_penalty += 10
+                        b_ks_penalty += 15
                     else:
-                        b_ks_penalty += 25
+                        b_ks_penalty += 35
             elif f <= 2: # Queen side (A8/B8/C8)
                 for file_idx in range(0, 3):
                     if (b_pawns & (<unsigned long long>1 << (48 + file_idx))) != 0:
                         pass
                     elif (b_pawns & (<unsigned long long>1 << (40 + file_idx))) != 0:
-                        b_ks_penalty += 10
+                        b_ks_penalty += 15
                     else:
-                        b_ks_penalty += 25
+                        b_ks_penalty += 35
 
         # 2. Open / Semi-open files near King
         if r >= 5:
