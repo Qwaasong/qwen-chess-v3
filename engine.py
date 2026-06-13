@@ -18,7 +18,10 @@ try:
         lsb,
         clear_bit,
         WHITE,
+        BLACK,
         KNIGHT_ATTACKS,
+        KING_ATTACKS,
+        PAWN_ATTACKS,
         get_bishop_attacks,
         get_rook_attacks,
         get_queen_attacks,
@@ -37,7 +40,10 @@ except ImportError:
         lsb,
         clear_bit,
         WHITE,
+        BLACK,
         KNIGHT_ATTACKS,
+        KING_ATTACKS,
+        PAWN_ATTACKS,
         get_bishop_attacks,
         get_rook_attacks,
         get_queen_attacks,
@@ -199,6 +205,15 @@ PST_EG = {
     5: KING_TABLE_EG
 }
 
+MOBILITY_KNIGHT_MG = [-62, -53, -12, -4, 3, 13, 22, 28, 33]
+MOBILITY_KNIGHT_EG = [-81, -56, -30, -14, 8, 15, 23, 27, 33]
+MOBILITY_BISHOP_MG = [-48, -20, 16, 26, 38, 51, 55, 63, 63, 68, 81, 81, 91, 98]
+MOBILITY_BISHOP_EG = [-59, -23, -3, 13, 24, 42, 54, 57, 65, 73, 78, 86, 88, 97]
+MOBILITY_ROOK_MG = [-58, -27, -15, -10, -5, -2, 9, 16, 30, 29, 32, 38, 46, 48, 58]
+MOBILITY_ROOK_EG = [-76, -18, 28, 55, 69, 82, 112, 118, 132, 142, 155, 165, 166, 169, 171]
+MOBILITY_QUEEN_MG = [-39, -21, 3, 3, 14, 22, 28, 41, 43, 48, 56, 60, 60, 66, 67, 70, 71, 73, 79, 88, 88, 99, 102, 102, 106, 109, 113, 116]
+MOBILITY_QUEEN_EG = [-36, -15, 8, 18, 34, 54, 61, 73, 79, 92, 94, 104, 113, 120, 123, 126, 133, 136, 140, 143, 148, 166, 170, 175, 184, 191, 206, 212]
+
 # Precompute material and PST values for fast evaluation
 white_piece_values_mg = {}
 black_piece_values_mg = {}
@@ -355,21 +370,21 @@ def evaluate(board: CustomBitboardBoard) -> int:
             
             # Mobility (White Knights=1, Bishops=2, Rooks=3, Queens=4)
             if p_idx == 1:
-                mobility = (KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_w).bit_count()
-                score_mg += mobility * 3
-                score_eg += mobility * 3
+                mobility = min((KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_w).bit_count(), 8)
+                score_mg += MOBILITY_KNIGHT_MG[mobility]
+                score_eg += MOBILITY_KNIGHT_EG[mobility]
             elif p_idx == 2:
-                mobility = (get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_w).bit_count()
-                score_mg += mobility * 3
-                score_eg += mobility * 3
+                mobility = min((get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_w).bit_count(), 13)
+                score_mg += MOBILITY_BISHOP_MG[mobility]
+                score_eg += MOBILITY_BISHOP_EG[mobility]
             elif p_idx == 3:
-                mobility = (get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_w).bit_count()
-                score_mg += mobility * 3
-                score_eg += mobility * 3
+                mobility = min((get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_w).bit_count(), 14)
+                score_mg += MOBILITY_ROOK_MG[mobility]
+                score_eg += MOBILITY_ROOK_EG[mobility]
             elif p_idx == 4:
-                mobility = (get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_w).bit_count()
-                score_mg += mobility * 3
-                score_eg += mobility * 3
+                mobility = min((get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_w).bit_count(), 27)
+                score_mg += MOBILITY_QUEEN_MG[mobility]
+                score_eg += MOBILITY_QUEEN_EG[mobility]
 
     # Black pieces (6-11)
     for p_idx in range(6):
@@ -382,21 +397,21 @@ def evaluate(board: CustomBitboardBoard) -> int:
             
             # Mobility (Black Knights=1, Bishops=2, Rooks=3, Queens=4)
             if p_idx == 1:
-                mobility = (KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_b).bit_count()
-                score_mg -= mobility * 3
-                score_eg -= mobility * 3
+                mobility = min((KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_b).bit_count(), 8)
+                score_mg -= MOBILITY_KNIGHT_MG[mobility]
+                score_eg -= MOBILITY_KNIGHT_EG[mobility]
             elif p_idx == 2:
-                mobility = (get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_b).bit_count()
-                score_mg -= mobility * 3
-                score_eg -= mobility * 3
+                mobility = min((get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_b).bit_count(), 13)
+                score_mg -= MOBILITY_BISHOP_MG[mobility]
+                score_eg -= MOBILITY_BISHOP_EG[mobility]
             elif p_idx == 3:
-                mobility = (get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_b).bit_count()
-                score_mg -= mobility * 3
-                score_eg -= mobility * 3
+                mobility = min((get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_b).bit_count(), 14)
+                score_mg -= MOBILITY_ROOK_MG[mobility]
+                score_eg -= MOBILITY_ROOK_EG[mobility]
             elif p_idx == 4:
-                mobility = (get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_b).bit_count()
-                score_mg -= mobility * 3
-                score_eg -= mobility * 3
+                mobility = min((get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_b).bit_count(), 27)
+                score_mg -= MOBILITY_QUEEN_MG[mobility]
+                score_eg -= MOBILITY_QUEEN_EG[mobility]
 
     # 3. Doubled Pawns penalty
     w_pawns = board.bitboards[0]  # P_P = 0
@@ -456,10 +471,12 @@ def evaluate(board: CustomBitboardBoard) -> int:
 
     # 5. King Safety (files g/h or b/c) on first rank (White) / eighth rank (Black)
     w_king_bb = board.bitboards[5] # P_K = 5
+    w_kingDanger_mg = 0
+    w_kingDanger_eg = 0
     if w_king_bb:
-        sq_idx = lsb(w_king_bb)
-        r = sq_idx // 8
-        f = sq_idx % 8
+        w_king_sq = lsb(w_king_bb)
+        r = w_king_sq // 8
+        f = w_king_sq % 8
         if r == 0:
             w_ks_penalty = 0
             if f == 6 or f == 7: # King side (G1/H1)
@@ -480,11 +497,181 @@ def evaluate(board: CustomBitboardBoard) -> int:
                         w_ks_penalty += 25
             score_mg -= w_ks_penalty
 
+        # New King Danger Calculation for White King (Black attackers)
+        w_king_ring = KING_ATTACKS[w_king_sq] | (1 << w_king_sq)
+        w_count = 0
+        w_weight = 0
+        w_attacks_count = 0
+        w_enemy_attacks = 0
+
+        # Black Knights (bitboards[7])
+        bb = board.bitboards[7]
+        while bb:
+            sq = lsb(bb)
+            bb = clear_bit(bb, sq)
+            piece_attacks = KNIGHT_ATTACKS[sq]
+            w_enemy_attacks |= piece_attacks
+            num_ring_attacks = (piece_attacks & w_king_ring).bit_count()
+            if num_ring_attacks > 0:
+                w_count += 1
+                w_weight += 81
+                w_attacks_count += num_ring_attacks
+
+        # Black Bishops (bitboards[8])
+        bb = board.bitboards[8]
+        while bb:
+            sq = lsb(bb)
+            bb = clear_bit(bb, sq)
+            piece_attacks = get_bishop_attacks(sq, both_occ)
+            w_enemy_attacks |= piece_attacks
+            num_ring_attacks = (piece_attacks & w_king_ring).bit_count()
+            if num_ring_attacks > 0:
+                w_count += 1
+                w_weight += 52
+                w_attacks_count += num_ring_attacks
+
+        # Black Rooks (bitboards[9])
+        bb = board.bitboards[9]
+        while bb:
+            sq = lsb(bb)
+            bb = clear_bit(bb, sq)
+            piece_attacks = get_rook_attacks(sq, both_occ)
+            w_enemy_attacks |= piece_attacks
+            num_ring_attacks = (piece_attacks & w_king_ring).bit_count()
+            if num_ring_attacks > 0:
+                w_count += 1
+                w_weight += 44
+                w_attacks_count += num_ring_attacks
+
+        # Black Queens (bitboards[10])
+        bb = board.bitboards[10]
+        while bb:
+            sq = lsb(bb)
+            bb = clear_bit(bb, sq)
+            piece_attacks = get_queen_attacks(sq, both_occ)
+            w_enemy_attacks |= piece_attacks
+            num_ring_attacks = (piece_attacks & w_king_ring).bit_count()
+            if num_ring_attacks > 0:
+                w_count += 1
+                w_weight += 10
+                w_attacks_count += num_ring_attacks
+
+        # Black Pawns (bitboards[6], contribute to enemy attacks)
+        bb = board.bitboards[6]
+        while bb:
+            sq = lsb(bb)
+            bb = clear_bit(bb, sq)
+            w_enemy_attacks |= PAWN_ATTACKS[BLACK][sq]
+
+        # White Pawn attacks (for weak square check)
+        w_pawn_attacks = 0
+        bb = board.bitboards[0]
+        while bb:
+            sq = lsb(bb)
+            bb = clear_bit(bb, sq)
+            w_pawn_attacks |= PAWN_ATTACKS[WHITE][sq]
+
+        w_weak = w_enemy_attacks & ~w_pawn_attacks
+        w_weak_squares_count = (w_king_ring & w_weak).bit_count()
+
+        if w_count >= 2:
+            w_kingDanger = w_count * w_weight + 101 * w_attacks_count + 148 * w_weak_squares_count
+            if board.bitboards[10] == 0:  # No Black Queen
+                w_kingDanger -= 490
+
+            w_has_queen_safe_check = False
+            w_has_rook_safe_check = False
+            w_has_bishop_safe_check = False
+            w_has_knight_safe_check = False
+
+            # Safe Check Checks (Black attackers on White King)
+            # Black Knight checks
+            w_knight_check_squares = KNIGHT_ATTACKS[w_king_sq]
+            bb = board.bitboards[7]
+            while bb:
+                sq = lsb(bb)
+                bb = clear_bit(bb, sq)
+                check_candidates = KNIGHT_ATTACKS[sq] & w_knight_check_squares & ~friendly_occ_b
+                while check_candidates:
+                    check_sq = lsb(check_candidates)
+                    check_candidates = clear_bit(check_candidates, check_sq)
+                    if (not board.is_square_attacked(check_sq, WHITE)) or ((PAWN_ATTACKS[BLACK][check_sq] & board.bitboards[6]) != 0):
+                        w_has_knight_safe_check = True
+                        break
+                if w_has_knight_safe_check:
+                    break
+
+            # Black Bishop checks
+            w_bishop_check_squares = get_bishop_attacks(w_king_sq, both_occ)
+            bb = board.bitboards[8]
+            while bb:
+                sq = lsb(bb)
+                bb = clear_bit(bb, sq)
+                check_candidates = get_bishop_attacks(sq, both_occ) & w_bishop_check_squares & ~friendly_occ_b
+                while check_candidates:
+                    check_sq = lsb(check_candidates)
+                    check_candidates = clear_bit(check_candidates, check_sq)
+                    if (not board.is_square_attacked(check_sq, WHITE)) or ((PAWN_ATTACKS[BLACK][check_sq] & board.bitboards[6]) != 0):
+                        w_has_bishop_safe_check = True
+                        break
+                if w_has_bishop_safe_check:
+                    break
+
+            # Black Rook checks
+            w_rook_check_squares = get_rook_attacks(w_king_sq, both_occ)
+            bb = board.bitboards[9]
+            while bb:
+                sq = lsb(bb)
+                bb = clear_bit(bb, sq)
+                check_candidates = get_rook_attacks(sq, both_occ) & w_rook_check_squares & ~friendly_occ_b
+                while check_candidates:
+                    check_sq = lsb(check_candidates)
+                    check_candidates = clear_bit(check_candidates, check_sq)
+                    if (not board.is_square_attacked(check_sq, WHITE)) or ((PAWN_ATTACKS[BLACK][check_sq] & board.bitboards[6]) != 0):
+                        w_has_rook_safe_check = True
+                        break
+                if w_has_rook_safe_check:
+                    break
+
+            # Black Queen checks
+            w_queen_check_squares = w_bishop_check_squares | w_rook_check_squares
+            bb = board.bitboards[10]
+            while bb:
+                sq = lsb(bb)
+                bb = clear_bit(bb, sq)
+                check_candidates = get_queen_attacks(sq, both_occ) & w_queen_check_squares & ~friendly_occ_b
+                while check_candidates:
+                    check_sq = lsb(check_candidates)
+                    check_candidates = clear_bit(check_candidates, check_sq)
+                    if (not board.is_square_attacked(check_sq, WHITE)) or ((PAWN_ATTACKS[BLACK][check_sq] & board.bitboards[6]) != 0):
+                        w_has_queen_safe_check = True
+                        break
+                if w_has_queen_safe_check:
+                    break
+
+            if w_has_queen_safe_check:
+                w_kingDanger += 780
+            if w_has_rook_safe_check:
+                w_kingDanger += 1080
+            if w_has_bishop_safe_check:
+                w_kingDanger += 635
+            if w_has_knight_safe_check:
+                w_kingDanger += 790
+
+            if w_kingDanger > 100:
+                w_kingDanger_mg = (w_kingDanger * w_kingDanger) // 4096
+                w_kingDanger_eg = w_kingDanger // 16
+
+        score_mg -= w_kingDanger_mg
+        score_eg -= w_kingDanger_eg
+
     b_king_bb = board.bitboards[11] # P_k = 11
+    b_kingDanger_mg = 0
+    b_kingDanger_eg = 0
     if b_king_bb:
-        sq_idx = lsb(b_king_bb)
-        r = sq_idx // 8
-        f = sq_idx % 8
+        b_king_sq = lsb(b_king_bb)
+        r = b_king_sq // 8
+        f = b_king_sq % 8
         if r == 7:
             b_ks_penalty = 0
             if f == 6 or f == 7: # King side (G8/H8)
@@ -504,6 +691,174 @@ def evaluate(board: CustomBitboardBoard) -> int:
                     else:
                         b_ks_penalty += 25
             score_mg += b_ks_penalty
+
+        # New King Danger Calculation for Black King (White attackers)
+        b_king_ring = KING_ATTACKS[b_king_sq] | (1 << b_king_sq)
+        b_count = 0
+        b_weight = 0
+        b_attacks_count = 0
+        b_enemy_attacks = 0
+
+        # White Knights (bitboards[1])
+        bb = board.bitboards[1]
+        while bb:
+            sq = lsb(bb)
+            bb = clear_bit(bb, sq)
+            piece_attacks = KNIGHT_ATTACKS[sq]
+            b_enemy_attacks |= piece_attacks
+            num_ring_attacks = (piece_attacks & b_king_ring).bit_count()
+            if num_ring_attacks > 0:
+                b_count += 1
+                b_weight += 81
+                b_attacks_count += num_ring_attacks
+
+        # White Bishops (bitboards[2])
+        bb = board.bitboards[2]
+        while bb:
+            sq = lsb(bb)
+            bb = clear_bit(bb, sq)
+            piece_attacks = get_bishop_attacks(sq, both_occ)
+            b_enemy_attacks |= piece_attacks
+            num_ring_attacks = (piece_attacks & b_king_ring).bit_count()
+            if num_ring_attacks > 0:
+                b_count += 1
+                b_weight += 52
+                b_attacks_count += num_ring_attacks
+
+        # White Rooks (bitboards[3])
+        bb = board.bitboards[3]
+        while bb:
+            sq = lsb(bb)
+            bb = clear_bit(bb, sq)
+            piece_attacks = get_rook_attacks(sq, both_occ)
+            b_enemy_attacks |= piece_attacks
+            num_ring_attacks = (piece_attacks & b_king_ring).bit_count()
+            if num_ring_attacks > 0:
+                b_count += 1
+                b_weight += 44
+                b_attacks_count += num_ring_attacks
+
+        # White Queens (bitboards[4])
+        bb = board.bitboards[4]
+        while bb:
+            sq = lsb(bb)
+            bb = clear_bit(bb, sq)
+            piece_attacks = get_queen_attacks(sq, both_occ)
+            b_enemy_attacks |= piece_attacks
+            num_ring_attacks = (piece_attacks & b_king_ring).bit_count()
+            if num_ring_attacks > 0:
+                b_count += 1
+                b_weight += 10
+                b_attacks_count += num_ring_attacks
+
+        # White Pawns (bitboards[0], contribute to enemy attacks)
+        bb = board.bitboards[0]
+        while bb:
+            sq = lsb(bb)
+            bb = clear_bit(bb, sq)
+            b_enemy_attacks |= PAWN_ATTACKS[WHITE][sq]
+
+        # Black Pawn attacks (for weak square check)
+        b_pawn_attacks = 0
+        bb = board.bitboards[6]
+        while bb:
+            sq = lsb(bb)
+            bb = clear_bit(bb, sq)
+            b_pawn_attacks |= PAWN_ATTACKS[BLACK][sq]
+
+        b_weak = b_enemy_attacks & ~b_pawn_attacks
+        b_weak_squares_count = (b_king_ring & b_weak).bit_count()
+
+        if b_count >= 2:
+            b_kingDanger = b_count * b_weight + 101 * b_attacks_count + 148 * b_weak_squares_count
+            if board.bitboards[4] == 0:  # No White Queen
+                b_kingDanger -= 490
+
+            b_has_queen_safe_check = False
+            b_has_rook_safe_check = False
+            b_has_bishop_safe_check = False
+            b_has_knight_safe_check = False
+
+            # Safe Check Checks (White attackers on Black King)
+            # White Knight checks
+            b_knight_check_squares = KNIGHT_ATTACKS[b_king_sq]
+            bb = board.bitboards[1]
+            while bb:
+                sq = lsb(bb)
+                bb = clear_bit(bb, sq)
+                check_candidates = KNIGHT_ATTACKS[sq] & b_knight_check_squares & ~friendly_occ_w
+                while check_candidates:
+                    check_sq = lsb(check_candidates)
+                    check_candidates = clear_bit(check_candidates, check_sq)
+                    if (not board.is_square_attacked(check_sq, BLACK)) or ((PAWN_ATTACKS[WHITE][check_sq] & board.bitboards[0]) != 0):
+                        b_has_knight_safe_check = True
+                        break
+                if b_has_knight_safe_check:
+                    break
+
+            # White Bishop checks
+            b_bishop_check_squares = get_bishop_attacks(b_king_sq, both_occ)
+            bb = board.bitboards[2]
+            while bb:
+                sq = lsb(bb)
+                bb = clear_bit(bb, sq)
+                check_candidates = get_bishop_attacks(sq, both_occ) & b_bishop_check_squares & ~friendly_occ_w
+                while check_candidates:
+                    check_sq = lsb(check_candidates)
+                    check_candidates = clear_bit(check_candidates, check_sq)
+                    if (not board.is_square_attacked(check_sq, BLACK)) or ((PAWN_ATTACKS[WHITE][check_sq] & board.bitboards[0]) != 0):
+                        b_has_bishop_safe_check = True
+                        break
+                if b_has_bishop_safe_check:
+                    break
+
+            # White Rook checks
+            b_rook_check_squares = get_rook_attacks(b_king_sq, both_occ)
+            bb = board.bitboards[3]
+            while bb:
+                sq = lsb(bb)
+                bb = clear_bit(bb, sq)
+                check_candidates = get_rook_attacks(sq, both_occ) & b_rook_check_squares & ~friendly_occ_w
+                while check_candidates:
+                    check_sq = lsb(check_candidates)
+                    check_candidates = clear_bit(check_candidates, check_sq)
+                    if (not board.is_square_attacked(check_sq, BLACK)) or ((PAWN_ATTACKS[WHITE][check_sq] & board.bitboards[0]) != 0):
+                        b_has_rook_safe_check = True
+                        break
+                if b_has_rook_safe_check:
+                    break
+
+            # White Queen checks
+            b_queen_check_squares = b_bishop_check_squares | b_rook_check_squares
+            bb = board.bitboards[4]
+            while bb:
+                sq = lsb(bb)
+                bb = clear_bit(bb, sq)
+                check_candidates = get_queen_attacks(sq, both_occ) & b_queen_check_squares & ~friendly_occ_w
+                while check_candidates:
+                    check_sq = lsb(check_candidates)
+                    check_candidates = clear_bit(check_candidates, check_sq)
+                    if (not board.is_square_attacked(check_sq, BLACK)) or ((PAWN_ATTACKS[WHITE][check_sq] & board.bitboards[0]) != 0):
+                        b_has_queen_safe_check = True
+                        break
+                if b_has_queen_safe_check:
+                    break
+
+            if b_has_queen_safe_check:
+                b_kingDanger += 780
+            if b_has_rook_safe_check:
+                b_kingDanger += 1080
+            if b_has_bishop_safe_check:
+                b_kingDanger += 635
+            if b_has_knight_safe_check:
+                b_kingDanger += 790
+
+            if b_kingDanger > 100:
+                b_kingDanger_mg = (b_kingDanger * b_kingDanger) // 4096
+                b_kingDanger_eg = b_kingDanger // 16
+
+        score_mg += b_kingDanger_mg
+        score_eg += b_kingDanger_eg
 
     # Interpolate between Middlegame and Endgame and return as C-like rounded integer
     return int((score_mg * phase + score_eg * (24 - phase)) / 24)
