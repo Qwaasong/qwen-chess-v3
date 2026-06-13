@@ -120,7 +120,10 @@ def main() -> None:
     global is_pondering, ponder_start_time, last_wtime, last_btime, last_winc, last_binc, last_movetime, last_depth_limit, last_infinite
     board = chess.Board()
 
-    for line in sys.stdin:
+    while True:
+        line = sys.stdin.readline()
+        if not line:
+            break
         line = line.strip()
         if not line:
             continue

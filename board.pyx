@@ -2030,62 +2030,11 @@ cdef void cy_evaluate_king_safety(CustomBitboardBoard board, int *mg_score, int 
     cdef unsigned long long w_pawns = board._bb[P_P]
     cdef unsigned long long b_pawns = board._bb[P_p]
 
-    cdef int w_kingDanger = 0
-    cdef int b_kingDanger = 0
-    cdef int w_kingDanger_mg = 0
-    cdef int w_kingDanger_eg = 0
-    cdef int b_kingDanger_mg = 0
-    cdef int b_kingDanger_eg = 0
-
-    cdef int w_count = 0
-    cdef int w_weight = 0
-    cdef int w_attacks_count = 0
-    cdef unsigned long long w_enemy_attacks = 0
-    cdef unsigned long long w_piece_attacks = 0
-    cdef int w_num_ring_attacks = 0
-    cdef unsigned long long w_king_ring = 0
-    cdef int w_king_sq = -1
-
-    cdef int b_count = 0
-    cdef int b_weight = 0
-    cdef int b_attacks_count = 0
-    cdef unsigned long long b_enemy_attacks = 0
-    cdef unsigned long long b_piece_attacks = 0
-    cdef int b_num_ring_attacks = 0
-    cdef unsigned long long b_king_ring = 0
-    cdef int b_king_sq = -1
-
-    cdef bint w_has_queen_safe_check = False
-    cdef bint w_has_rook_safe_check = False
-    cdef bint w_has_bishop_safe_check = False
-    cdef bint w_has_knight_safe_check = False
-
-    cdef bint b_has_queen_safe_check = False
-    cdef bint b_has_rook_safe_check = False
-    cdef bint b_has_bishop_safe_check = False
-    cdef bint b_has_knight_safe_check = False
-
-    cdef unsigned long long friendly_occ_w = board._occ[WHITE]
-    cdef unsigned long long friendly_occ_b = board._occ[BLACK]
-    cdef unsigned long long both_occ = board._occ[2]
-    
-    cdef unsigned long long bb, check_candidates
-    cdef int sq, check_sq
-    cdef unsigned long long w_knight_check_squares, w_bishop_check_squares, w_rook_check_squares, w_queen_check_squares
-    cdef unsigned long long b_knight_check_squares, b_bishop_check_squares, b_rook_check_squares, b_queen_check_squares
-
-    cdef unsigned long long w_pawn_attacks = 0
-    cdef unsigned long long b_pawn_attacks = 0
-    cdef unsigned long long w_weak = 0
-    cdef unsigned long long b_weak = 0
-    cdef int w_weak_squares_count = 0
-    cdef int b_weak_squares_count = 0
-
     # White King Safety
     if board._bb[P_K]:
-        w_king_sq = _cy_lsb_impl(board._bb[P_K])
-        r = w_king_sq >> 3
-        f = w_king_sq & 7
+        sq_idx = _cy_lsb_impl(board._bb[P_K])
+        r = sq_idx >> 3
+        f = sq_idx & 7
         
         # 1. Pawn shield
         if r == 0:
@@ -2118,173 +2067,18 @@ cdef void cy_evaluate_king_safety(CustomBitboardBoard board, int *mg_score, int 
                         w_ks_penalty += 20
 
         # 3. Defender counts (minor pieces in king ring)
-        defenders_w = cy_popcount_board((board._bb[P_N] | board._bb[P_B]) & _KING_ATTACKS[w_king_sq])
+        defenders_w = cy_popcount_board((board._bb[P_N] | board._bb[P_B]) & _KING_ATTACKS[sq_idx])
         if defenders_w == 0:
             if board._bb[P_q] != 0 or board._bb[P_r] != 0:
                 w_ks_penalty += 20
         elif defenders_w >= 2:
             w_ks_penalty -= 10
 
-        # New King Danger Calculation for White King (Black attackers)
-        w_king_ring = _KING_ATTACKS[w_king_sq] | (<unsigned long long>1 << w_king_sq)
-        
-        # Black Knights
-        bb = board._bb[P_n]
-        while bb:
-            sq = _cy_lsb_impl(bb)
-            bb = bb & ~(<unsigned long long>1 << sq)
-            w_piece_attacks = _KNIGHT_ATTACKS[sq]
-            w_enemy_attacks |= w_piece_attacks
-            w_num_ring_attacks = cy_popcount_board(w_piece_attacks & w_king_ring)
-            if w_num_ring_attacks > 0:
-                w_count += 1
-                w_weight += 81
-                w_attacks_count += w_num_ring_attacks
-
-        # Black Bishops
-        bb = board._bb[P_b]
-        while bb:
-            sq = _cy_lsb_impl(bb)
-            bb = bb & ~(<unsigned long long>1 << sq)
-            w_piece_attacks = cy_get_bishop_attacks(sq, both_occ)
-            w_enemy_attacks |= w_piece_attacks
-            w_num_ring_attacks = cy_popcount_board(w_piece_attacks & w_king_ring)
-            if w_num_ring_attacks > 0:
-                w_count += 1
-                w_weight += 52
-                w_attacks_count += w_num_ring_attacks
-
-        # Black Rooks
-        bb = board._bb[P_r]
-        while bb:
-            sq = _cy_lsb_impl(bb)
-            bb = bb & ~(<unsigned long long>1 << sq)
-            w_piece_attacks = cy_get_rook_attacks(sq, both_occ)
-            w_enemy_attacks |= w_piece_attacks
-            w_num_ring_attacks = cy_popcount_board(w_piece_attacks & w_king_ring)
-            if w_num_ring_attacks > 0:
-                w_count += 1
-                w_weight += 44
-                w_attacks_count += w_num_ring_attacks
-
-        # Black Queens
-        bb = board._bb[P_q]
-        while bb:
-            sq = _cy_lsb_impl(bb)
-            bb = bb & ~(<unsigned long long>1 << sq)
-            w_piece_attacks = cy_get_queen_attacks(sq, both_occ)
-            w_enemy_attacks |= w_piece_attacks
-            w_num_ring_attacks = cy_popcount_board(w_piece_attacks & w_king_ring)
-            if w_num_ring_attacks > 0:
-                w_count += 1
-                w_weight += 10
-                w_attacks_count += w_num_ring_attacks
-
-        # Black Pawns (contribute to enemy attacks)
-        bb = board._bb[P_p]
-        while bb:
-            sq = _cy_lsb_impl(bb)
-            bb = bb & ~(<unsigned long long>1 << sq)
-            w_enemy_attacks |= _PAWN_ATTACKS_B[sq]
-
-        # White Pawn attacks (for weak square check)
-        bb = board._bb[P_P]
-        while bb:
-            sq = _cy_lsb_impl(bb)
-            bb = bb & ~(<unsigned long long>1 << sq)
-            w_pawn_attacks |= _PAWN_ATTACKS_W[sq]
-
-        w_weak = w_enemy_attacks & ~w_pawn_attacks
-        w_weak_squares_count = cy_popcount_board(w_king_ring & w_weak)
-
-        if w_count >= 2:
-            w_kingDanger = w_count * w_weight + 101 * w_attacks_count + 148 * w_weak_squares_count
-            if board._bb[P_q] == 0:
-                w_kingDanger -= 490
-
-            # Safe Check Checks (Black attackers on White King)
-            # Black Knight checks
-            w_knight_check_squares = _KNIGHT_ATTACKS[w_king_sq]
-            bb = board._bb[P_n]
-            while bb:
-                sq = _cy_lsb_impl(bb)
-                bb = bb & ~(<unsigned long long>1 << sq)
-                check_candidates = _KNIGHT_ATTACKS[sq] & w_knight_check_squares & ~friendly_occ_b
-                while check_candidates:
-                    check_sq = _cy_lsb_impl(check_candidates)
-                    check_candidates = check_candidates & ~(<unsigned long long>1 << check_sq)
-                    if (not cy_is_square_attacked(board._bb, both_occ, check_sq, WHITE)) or ((_PAWN_ATTACKS_B[check_sq] & board._bb[P_p]) != 0):
-                        w_has_knight_safe_check = True
-                        break
-                if w_has_knight_safe_check:
-                    break
-
-            # Black Bishop checks
-            w_bishop_check_squares = cy_get_bishop_attacks(w_king_sq, both_occ)
-            bb = board._bb[P_b]
-            while bb:
-                sq = _cy_lsb_impl(bb)
-                bb = bb & ~(<unsigned long long>1 << sq)
-                check_candidates = cy_get_bishop_attacks(sq, both_occ) & w_bishop_check_squares & ~friendly_occ_b
-                while check_candidates:
-                    check_sq = _cy_lsb_impl(check_candidates)
-                    check_candidates = check_candidates & ~(<unsigned long long>1 << check_sq)
-                    if (not cy_is_square_attacked(board._bb, both_occ, check_sq, WHITE)) or ((_PAWN_ATTACKS_B[check_sq] & board._bb[P_p]) != 0):
-                        w_has_bishop_safe_check = True
-                        break
-                if w_has_bishop_safe_check:
-                    break
-
-            # Black Rook checks
-            w_rook_check_squares = cy_get_rook_attacks(w_king_sq, both_occ)
-            bb = board._bb[P_r]
-            while bb:
-                sq = _cy_lsb_impl(bb)
-                bb = bb & ~(<unsigned long long>1 << sq)
-                check_candidates = cy_get_rook_attacks(sq, both_occ) & w_rook_check_squares & ~friendly_occ_b
-                while check_candidates:
-                    check_sq = _cy_lsb_impl(check_candidates)
-                    check_candidates = check_candidates & ~(<unsigned long long>1 << check_sq)
-                    if (not cy_is_square_attacked(board._bb, both_occ, check_sq, WHITE)) or ((_PAWN_ATTACKS_B[check_sq] & board._bb[P_p]) != 0):
-                        w_has_rook_safe_check = True
-                        break
-                if w_has_rook_safe_check:
-                    break
-
-            # Black Queen checks
-            w_queen_check_squares = w_bishop_check_squares | w_rook_check_squares
-            bb = board._bb[P_q]
-            while bb:
-                sq = _cy_lsb_impl(bb)
-                bb = bb & ~(<unsigned long long>1 << sq)
-                check_candidates = cy_get_queen_attacks(sq, both_occ) & w_queen_check_squares & ~friendly_occ_b
-                while check_candidates:
-                    check_sq = _cy_lsb_impl(check_candidates)
-                    check_candidates = check_candidates & ~(<unsigned long long>1 << check_sq)
-                    if (not cy_is_square_attacked(board._bb, both_occ, check_sq, WHITE)) or ((_PAWN_ATTACKS_B[check_sq] & board._bb[P_p]) != 0):
-                        w_has_queen_safe_check = True
-                        break
-                if w_has_queen_safe_check:
-                    break
-
-            if w_has_queen_safe_check:
-                w_kingDanger += 780
-            if w_has_rook_safe_check:
-                w_kingDanger += 1080
-            if w_has_bishop_safe_check:
-                w_kingDanger += 635
-            if w_has_knight_safe_check:
-                w_kingDanger += 790
-
-            if w_kingDanger > 100:
-                w_kingDanger_mg = (w_kingDanger * w_kingDanger) // 4096
-                w_kingDanger_eg = w_kingDanger // 16
-
     # Black King Safety
     if board._bb[P_k]:
-        b_king_sq = _cy_lsb_impl(board._bb[P_k])
-        r = b_king_sq >> 3
-        f = b_king_sq & 7
+        sq_idx = _cy_lsb_impl(board._bb[P_k])
+        r = sq_idx >> 3
+        f = sq_idx & 7
 
         # 1. Pawn shield
         if r == 7:
@@ -2317,175 +2111,15 @@ cdef void cy_evaluate_king_safety(CustomBitboardBoard board, int *mg_score, int 
                         b_ks_penalty += 20
 
         # 3. Defender counts
-        defenders_b = cy_popcount_board((board._bb[P_n] | board._bb[P_b]) & _KING_ATTACKS[b_king_sq])
+        defenders_b = cy_popcount_board((board._bb[P_n] | board._bb[P_b]) & _KING_ATTACKS[sq_idx])
         if defenders_b == 0:
             if board._bb[P_Q] != 0 or board._bb[P_R] != 0:
                 b_ks_penalty += 20
         elif defenders_b >= 2:
             b_ks_penalty -= 10
 
-        # New King Danger Calculation for Black King (White attackers)
-        b_king_ring = _KING_ATTACKS[b_king_sq] | (<unsigned long long>1 << b_king_sq)
-        
-        # White Knights
-        bb = board._bb[P_N]
-        while bb:
-            sq = _cy_lsb_impl(bb)
-            bb = bb & ~(<unsigned long long>1 << sq)
-            b_piece_attacks = _KNIGHT_ATTACKS[sq]
-            b_enemy_attacks |= b_piece_attacks
-            b_num_ring_attacks = cy_popcount_board(b_piece_attacks & b_king_ring)
-            if b_num_ring_attacks > 0:
-                b_count += 1
-                b_weight += 81
-                b_attacks_count += b_num_ring_attacks
-
-        # White Bishops
-        bb = board._bb[P_B]
-        while bb:
-            sq = _cy_lsb_impl(bb)
-            bb = bb & ~(<unsigned long long>1 << sq)
-            b_piece_attacks = cy_get_bishop_attacks(sq, both_occ)
-            b_enemy_attacks |= b_piece_attacks
-            b_num_ring_attacks = cy_popcount_board(b_piece_attacks & b_king_ring)
-            if b_num_ring_attacks > 0:
-                b_count += 1
-                b_weight += 52
-                b_attacks_count += b_num_ring_attacks
-
-        # White Rooks
-        bb = board._bb[P_R]
-        while bb:
-            sq = _cy_lsb_impl(bb)
-            bb = bb & ~(<unsigned long long>1 << sq)
-            b_piece_attacks = cy_get_rook_attacks(sq, both_occ)
-            b_enemy_attacks |= b_piece_attacks
-            b_num_ring_attacks = cy_popcount_board(b_piece_attacks & b_king_ring)
-            if b_num_ring_attacks > 0:
-                b_count += 1
-                b_weight += 44
-                b_attacks_count += b_num_ring_attacks
-
-        # White Queens
-        bb = board._bb[P_Q]
-        while bb:
-            sq = _cy_lsb_impl(bb)
-            bb = bb & ~(<unsigned long long>1 << sq)
-            b_piece_attacks = cy_get_queen_attacks(sq, both_occ)
-            b_enemy_attacks |= b_piece_attacks
-            b_num_ring_attacks = cy_popcount_board(b_piece_attacks & b_king_ring)
-            if b_num_ring_attacks > 0:
-                b_count += 1
-                b_weight += 10
-                b_attacks_count += b_num_ring_attacks
-
-        # White Pawns (contribute to enemy attacks)
-        bb = board._bb[P_P]
-        while bb:
-            sq = _cy_lsb_impl(bb)
-            bb = bb & ~(<unsigned long long>1 << sq)
-            b_enemy_attacks |= _PAWN_ATTACKS_W[sq]
-
-        # Black Pawn attacks (for weak square check)
-        bb = board._bb[P_p]
-        while bb:
-            sq = _cy_lsb_impl(bb)
-            bb = bb & ~(<unsigned long long>1 << sq)
-            b_pawn_attacks |= _PAWN_ATTACKS_B[sq]
-
-        b_weak = b_enemy_attacks & ~b_pawn_attacks
-        b_weak_squares_count = cy_popcount_board(b_king_ring & b_weak)
-
-        if b_count >= 2:
-            b_kingDanger = b_count * b_weight + 101 * b_attacks_count + 148 * b_weak_squares_count
-            if board._bb[P_Q] == 0:
-                b_kingDanger -= 490
-
-            # Safe Check Checks (White attackers on Black King)
-            # White Knight checks
-            b_knight_check_squares = _KNIGHT_ATTACKS[b_king_sq]
-            bb = board._bb[P_N]
-            while bb:
-                sq = _cy_lsb_impl(bb)
-                bb = bb & ~(<unsigned long long>1 << sq)
-                check_candidates = _KNIGHT_ATTACKS[sq] & b_knight_check_squares & ~friendly_occ_w
-                while check_candidates:
-                    check_sq = _cy_lsb_impl(check_candidates)
-                    check_candidates = check_candidates & ~(<unsigned long long>1 << check_sq)
-                    if (not cy_is_square_attacked(board._bb, both_occ, check_sq, BLACK)) or ((_PAWN_ATTACKS_W[check_sq] & board._bb[P_P]) != 0):
-                        b_has_knight_safe_check = True
-                        break
-                if b_has_knight_safe_check:
-                    break
-
-            # White Bishop checks
-            b_bishop_check_squares = cy_get_bishop_attacks(b_king_sq, both_occ)
-            bb = board._bb[P_B]
-            while bb:
-                sq = _cy_lsb_impl(bb)
-                bb = bb & ~(<unsigned long long>1 << sq)
-                check_candidates = cy_get_bishop_attacks(sq, both_occ) & b_bishop_check_squares & ~friendly_occ_w
-                while check_candidates:
-                    check_sq = _cy_lsb_impl(check_candidates)
-                    check_candidates = check_candidates & ~(<unsigned long long>1 << check_sq)
-                    if (not cy_is_square_attacked(board._bb, both_occ, check_sq, BLACK)) or ((_PAWN_ATTACKS_W[check_sq] & board._bb[P_P]) != 0):
-                        b_has_bishop_safe_check = True
-                        break
-                if b_has_bishop_safe_check:
-                    break
-
-            # White Rook checks
-            b_rook_check_squares = cy_get_rook_attacks(b_king_sq, both_occ)
-            bb = board._bb[P_R]
-            while bb:
-                sq = _cy_lsb_impl(bb)
-                bb = bb & ~(<unsigned long long>1 << sq)
-                check_candidates = cy_get_rook_attacks(sq, both_occ) & b_rook_check_squares & ~friendly_occ_w
-                while check_candidates:
-                    check_sq = _cy_lsb_impl(check_candidates)
-                    check_candidates = check_candidates & ~(<unsigned long long>1 << check_sq)
-                    if (not cy_is_square_attacked(board._bb, both_occ, check_sq, BLACK)) or ((_PAWN_ATTACKS_W[check_sq] & board._bb[P_P]) != 0):
-                        b_has_rook_safe_check = True
-                        break
-                if b_has_rook_safe_check:
-                    break
-
-            # White Queen checks
-            b_queen_check_squares = b_bishop_check_squares | b_rook_check_squares
-            bb = board._bb[P_Q]
-            while bb:
-                sq = _cy_lsb_impl(bb)
-                bb = bb & ~(<unsigned long long>1 << sq)
-                check_candidates = cy_get_queen_attacks(sq, both_occ) & b_queen_check_squares & ~friendly_occ_w
-                while check_candidates:
-                    check_sq = _cy_lsb_impl(check_candidates)
-                    check_candidates = check_candidates & ~(<unsigned long long>1 << check_sq)
-                    if (not cy_is_square_attacked(board._bb, both_occ, check_sq, BLACK)) or ((_PAWN_ATTACKS_W[check_sq] & board._bb[P_P]) != 0):
-                        b_has_queen_safe_check = True
-                        break
-                if b_has_queen_safe_check:
-                    break
-
-            if b_has_queen_safe_check:
-                b_kingDanger += 780
-            if b_has_rook_safe_check:
-                b_kingDanger += 1080
-            if b_has_bishop_safe_check:
-                b_kingDanger += 635
-            if b_has_knight_safe_check:
-                b_kingDanger += 790
-
-            if b_kingDanger > 100:
-                b_kingDanger_mg = (b_kingDanger * b_kingDanger) // 4096
-                b_kingDanger_eg = b_kingDanger // 16
-
     mg_score[0] -= w_ks_penalty
     mg_score[0] += b_ks_penalty
-    
-    mg_score[0] -= w_kingDanger_mg
-    mg_score[0] += b_kingDanger_mg
-    eg_score[0] -= w_kingDanger_eg
-    eg_score[0] += b_kingDanger_eg
 
 cdef void cy_get_evaluation_bonuses(CustomBitboardBoard board, int *mg_score, int *eg_score) noexcept nogil:
     cdef int mg = 0
@@ -2517,9 +2151,8 @@ cdef void cy_get_evaluation_bonuses(CustomBitboardBoard board, int *mg_score, in
         bb = bb & ~(<unsigned long long>1 << sq_idx)
         attacks = _KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_w
         mobility = cy_popcount_board(attacks)
-        if mobility > 8: mobility = 8
-        mg += _MOBILITY_KNIGHT_MG[mobility]
-        eg += _MOBILITY_KNIGHT_EG[mobility]
+        mg += mobility * 3
+        eg += mobility * 3
         
     # Knights (Black)
     bb = board._bb[P_n]
@@ -2528,9 +2161,8 @@ cdef void cy_get_evaluation_bonuses(CustomBitboardBoard board, int *mg_score, in
         bb = bb & ~(<unsigned long long>1 << sq_idx)
         attacks = _KNIGHT_ATTACKS[sq_idx] & ~friendly_occ_b
         mobility = cy_popcount_board(attacks)
-        if mobility > 8: mobility = 8
-        mg -= _MOBILITY_KNIGHT_MG[mobility]
-        eg -= _MOBILITY_KNIGHT_EG[mobility]
+        mg -= mobility * 3
+        eg -= mobility * 3
 
     # Bishops (White)
     bb = board._bb[P_B]
@@ -2539,9 +2171,8 @@ cdef void cy_get_evaluation_bonuses(CustomBitboardBoard board, int *mg_score, in
         bb = bb & ~(<unsigned long long>1 << sq_idx)
         attacks = cy_get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_w
         mobility = cy_popcount_board(attacks)
-        if mobility > 13: mobility = 13
-        mg += _MOBILITY_BISHOP_MG[mobility]
-        eg += _MOBILITY_BISHOP_EG[mobility]
+        mg += mobility * 3
+        eg += mobility * 3
 
     # Bishops (Black)
     bb = board._bb[P_b]
@@ -2550,9 +2181,8 @@ cdef void cy_get_evaluation_bonuses(CustomBitboardBoard board, int *mg_score, in
         bb = bb & ~(<unsigned long long>1 << sq_idx)
         attacks = cy_get_bishop_attacks(sq_idx, both_occ) & ~friendly_occ_b
         mobility = cy_popcount_board(attacks)
-        if mobility > 13: mobility = 13
-        mg -= _MOBILITY_BISHOP_MG[mobility]
-        eg -= _MOBILITY_BISHOP_EG[mobility]
+        mg -= mobility * 3
+        eg -= mobility * 3
 
     # Rooks (White)
     bb = board._bb[P_R]
@@ -2561,9 +2191,8 @@ cdef void cy_get_evaluation_bonuses(CustomBitboardBoard board, int *mg_score, in
         bb = bb & ~(<unsigned long long>1 << sq_idx)
         attacks = cy_get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_w
         mobility = cy_popcount_board(attacks)
-        if mobility > 14: mobility = 14
-        mg += _MOBILITY_ROOK_MG[mobility]
-        eg += _MOBILITY_ROOK_EG[mobility]
+        mg += mobility * 3
+        eg += mobility * 3
 
     # Rooks (Black)
     bb = board._bb[P_r]
@@ -2572,9 +2201,8 @@ cdef void cy_get_evaluation_bonuses(CustomBitboardBoard board, int *mg_score, in
         bb = bb & ~(<unsigned long long>1 << sq_idx)
         attacks = cy_get_rook_attacks(sq_idx, both_occ) & ~friendly_occ_b
         mobility = cy_popcount_board(attacks)
-        if mobility > 14: mobility = 14
-        mg -= _MOBILITY_ROOK_MG[mobility]
-        eg -= _MOBILITY_ROOK_EG[mobility]
+        mg -= mobility * 3
+        eg -= mobility * 3
 
     # Queens (White)
     bb = board._bb[P_Q]
@@ -2583,9 +2211,8 @@ cdef void cy_get_evaluation_bonuses(CustomBitboardBoard board, int *mg_score, in
         bb = bb & ~(<unsigned long long>1 << sq_idx)
         attacks = cy_get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_w
         mobility = cy_popcount_board(attacks)
-        if mobility > 27: mobility = 27
-        mg += _MOBILITY_QUEEN_MG[mobility]
-        eg += _MOBILITY_QUEEN_EG[mobility]
+        mg += mobility * 3
+        eg += mobility * 3
 
     # Queens (Black)
     bb = board._bb[P_q]
@@ -2594,9 +2221,8 @@ cdef void cy_get_evaluation_bonuses(CustomBitboardBoard board, int *mg_score, in
         bb = bb & ~(<unsigned long long>1 << sq_idx)
         attacks = cy_get_queen_attacks(sq_idx, both_occ) & ~friendly_occ_b
         mobility = cy_popcount_board(attacks)
-        if mobility > 27: mobility = 27
-        mg -= _MOBILITY_QUEEN_MG[mobility]
-        eg -= _MOBILITY_QUEEN_EG[mobility]
+        mg -= mobility * 3
+        eg -= mobility * 3
         
     # 3. Pawn structure evaluations
     cy_evaluate_pawns(board, &mg, &eg)
