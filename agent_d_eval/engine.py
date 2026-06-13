@@ -44,10 +44,10 @@ except ImportError:
     )
 
 # --- Configuration ---
-PIECE_VALUES = [100, 320, 330, 500, 900, 0]
+PIECE_VALUES = [100, 320, 335, 495, 900, 0]
 
-PIECE_VALUES_MG = [82, 337, 365, 477, 1025, 0]
-PIECE_VALUES_EG = [94, 281, 297, 512, 936, 0]
+PIECE_VALUES_MG = [82, 337, 370, 472, 1025, 0]
+PIECE_VALUES_EG = [94, 281, 302, 507, 936, 0]
 
 PAWN_TABLE_MG = (
       0,   0,   0,   0,   0,   0,  0,   0,
@@ -415,8 +415,8 @@ def evaluate(board: CustomBitboardBoard) -> int:
             score_eg -= (b_count - 1) * -15
 
     # 4. Passed & Isolated Pawns
-    passed_pawn_mg = [0, 10, 17, 15, 62, 168, 276, 0]
-    passed_pawn_eg = [0, 28, 33, 41, 72, 177, 260, 0]
+    passed_pawn_mg = [0, 10, 18, 16, 64, 170, 280, 0]
+    passed_pawn_eg = [0, 28, 35, 43, 75, 180, 265, 0]
 
     # White Pawns
     bb = w_pawns
@@ -535,9 +535,9 @@ def get_mvv_lva_score(board: CustomBitboardBoard, move: int) -> int:
         if flag == FLAG_PROMOTE_Q:
             score += 9000
         elif flag == FLAG_PROMOTE_R:
-            score += 5000
+            score += 4950
         elif flag == FLAG_PROMOTE_B:
-            score += 3300
+            score += 3350
         else:
             score += 3200
     return score

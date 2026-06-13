@@ -531,8 +531,8 @@ _init_zobrist()
 cdef int PIECE_VALUES[6]
 PIECE_VALUES[0] = 100
 PIECE_VALUES[1] = 320
-PIECE_VALUES[2] = 330
-PIECE_VALUES[3] = 500
+PIECE_VALUES[2] = 335
+PIECE_VALUES[3] = 495
 PIECE_VALUES[4] = 900
 PIECE_VALUES[5] = 0
 
@@ -540,16 +540,16 @@ PIECE_VALUES[5] = 0
 cdef int PIECE_VALUES_MG[6]
 PIECE_VALUES_MG[0] = 82
 PIECE_VALUES_MG[1] = 337
-PIECE_VALUES_MG[2] = 365
-PIECE_VALUES_MG[3] = 477
+PIECE_VALUES_MG[2] = 370
+PIECE_VALUES_MG[3] = 472
 PIECE_VALUES_MG[4] = 1025
 PIECE_VALUES_MG[5] = 0
 
 cdef int PIECE_VALUES_EG[6]
 PIECE_VALUES_EG[0] = 94
 PIECE_VALUES_EG[1] = 281
-PIECE_VALUES_EG[2] = 297
-PIECE_VALUES_EG[3] = 512
+PIECE_VALUES_EG[2] = 302
+PIECE_VALUES_EG[3] = 507
 PIECE_VALUES_EG[4] = 936
 PIECE_VALUES_EG[5] = 0
 
@@ -1879,21 +1879,21 @@ cdef void cy_evaluate_pawns(CustomBitboardBoard board, int *mg_score, int *eg_sc
     cdef int passed_pawn_mg[8]
     passed_pawn_mg[0] = 0
     passed_pawn_mg[1] = 10
-    passed_pawn_mg[2] = 17
-    passed_pawn_mg[3] = 15
-    passed_pawn_mg[4] = 62
-    passed_pawn_mg[5] = 168
-    passed_pawn_mg[6] = 276
+    passed_pawn_mg[2] = 18
+    passed_pawn_mg[3] = 16
+    passed_pawn_mg[4] = 64
+    passed_pawn_mg[5] = 170
+    passed_pawn_mg[6] = 280
     passed_pawn_mg[7] = 0
 
     cdef int passed_pawn_eg[8]
     passed_pawn_eg[0] = 0
     passed_pawn_eg[1] = 28
-    passed_pawn_eg[2] = 33
-    passed_pawn_eg[3] = 41
-    passed_pawn_eg[4] = 72
-    passed_pawn_eg[5] = 177
-    passed_pawn_eg[6] = 260
+    passed_pawn_eg[2] = 35
+    passed_pawn_eg[3] = 43
+    passed_pawn_eg[4] = 75
+    passed_pawn_eg[5] = 180
+    passed_pawn_eg[6] = 265
     passed_pawn_eg[7] = 0
 
     cdef unsigned long long w_pawns = board._bb[P_P]
