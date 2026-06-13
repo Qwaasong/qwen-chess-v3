@@ -856,13 +856,16 @@ cdef inline void remove_piece_eval(int piece, int sq, int *score_mg, int *score_
 cdef struct CGameState:
     unsigned long long bitboards[12]   # piece bitboards (white P..K, black p..k)
     unsigned long long occupancies[3]  # [WHITE, BLACK, BOTH]
-    int side_to_move
-    int castling_rights
-    int en_passant_sq
-    int halfmove_clock
-    int fullmove_number
-    int piece_map[64]                  # piece index per square; -1 = empty
     unsigned long long zobrist_key
+    int score_mg
+    int score_eg
+    int phase
+    unsigned short fullmove_number
+    unsigned char side_to_move
+    unsigned char castling_rights
+    unsigned char en_passant_sq
+    unsigned char halfmove_clock
+    signed char piece_map[64]                  # piece index per square; -1 = empty
 
 
 # ---------------------------------------------------------------------------
@@ -873,12 +876,12 @@ cdef inline void _save_state(CGameState *slot,
                               unsigned long long *occ_py,
                               int side, int castle, int ep,
                               int half, int full,
-                              int *pm,
+                              signed char *pm,
                               unsigned long long zobrist) noexcept nogil:
     """Write board state into a CGameState slot (pure C, no GIL)."""
     memcpy(slot.bitboards,    bbs_py, 12 * sizeof(unsigned long long))
     memcpy(slot.occupancies,  occ_py,  3 * sizeof(unsigned long long))
-    memcpy(slot.piece_map,    pm,     64 * sizeof(int))
+    memcpy(slot.piece_map,    pm,     64 * sizeof(signed char))
     slot.side_to_move    = side
     slot.castling_rights = castle
     slot.en_passant_sq   = ep
@@ -951,7 +954,7 @@ cdef class CustomBitboardBoard:
         self.zobrist_key     = 0
 
         # Initialise piece_map to -1 (empty) using libc memset
-        memset(self.piece_map, 0xFF, 64 * sizeof(int))  # 0xFF fill → -1 for int32
+        memset(self.piece_map, 0xFF, 64 * sizeof(signed char))  # 0xFF fill → -1 for signed char
         memset(self._bb,  0, 12 * sizeof(unsigned long long))
         memset(self._occ, 0,  3 * sizeof(unsigned long long))
 
@@ -1572,7 +1575,7 @@ cdef class CustomBitboardBoard:
         cdef CGameState *slot = &self._history[self._history_len]
         memcpy(slot.bitboards,    self._bb,       12 * sizeof(unsigned long long))
         memcpy(slot.occupancies,  self._occ,       3 * sizeof(unsigned long long))
-        memcpy(slot.piece_map,    self.piece_map, 64 * sizeof(int))
+        memcpy(slot.piece_map,    self.piece_map, 64 * sizeof(signed char))
         slot.side_to_move    = self.side_to_move
         slot.castling_rights = self.castling_rights
         slot.en_passant_sq   = self.en_passant_sq
@@ -1783,7 +1786,7 @@ cdef class CustomBitboardBoard:
         cdef CGameState *slot = &self._history[self._history_len]
         memcpy(slot.bitboards,    self._bb,       12 * sizeof(unsigned long long))
         memcpy(slot.occupancies,  self._occ,       3 * sizeof(unsigned long long))
-        memcpy(slot.piece_map,    self.piece_map, 64 * sizeof(int))
+        memcpy(slot.piece_map,    self.piece_map, 64 * sizeof(signed char))
         slot.side_to_move    = self.side_to_move
         slot.castling_rights = self.castling_rights
         slot.en_passant_sq   = self.en_passant_sq
@@ -1838,8 +1841,8 @@ cdef class CustomBitboardBoard:
         self.score_eg        = slot.score_eg
         self.phase           = slot.phase
 
-        # Restore piece_map via memcpy — 256-byte copy, entirely in C
-        memcpy(self.piece_map, slot.piece_map, 64 * sizeof(int))
+        # Restore piece_map via memcpy — 64-byte copy, entirely in C
+        memcpy(self.piece_map, slot.piece_map, 64 * sizeof(signed char))
 
         # Restore bitboards and occupancies (C array)
         memcpy(self._bb,  slot.bitboards,   12 * sizeof(unsigned long long))

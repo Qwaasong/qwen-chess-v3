@@ -776,7 +776,7 @@ def clear_tt():
 cdef void load_state_to_shell(CGameState *state, CustomBitboardBoard shell) noexcept nogil:
     memcpy(shell._bb,       state.bitboards,    12 * sizeof(unsigned long long))
     memcpy(shell._occ,      state.occupancies,   3 * sizeof(unsigned long long))
-    memcpy(shell.piece_map, state.piece_map,    64 * sizeof(int))
+    memcpy(shell.piece_map, state.piece_map,    64 * sizeof(signed char))
     shell.side_to_move    = state.side_to_move
     shell.castling_rights = state.castling_rights
     shell.en_passant_sq   = state.en_passant_sq
@@ -1700,7 +1700,7 @@ def get_best_move_cy(
     cdef CGameState root_state
     memcpy(root_state.bitboards,    board._bb,       12 * sizeof(unsigned long long))
     memcpy(root_state.occupancies,  board._occ,       3 * sizeof(unsigned long long))
-    memcpy(root_state.piece_map,    board.piece_map, 64 * sizeof(int))
+    memcpy(root_state.piece_map,    board.piece_map, 64 * sizeof(signed char))
     root_state.side_to_move    = board.side_to_move
     root_state.castling_rights = board.castling_rights
     root_state.en_passant_sq   = board.en_passant_sq
@@ -1882,7 +1882,7 @@ def generate_legal_moves_copymake(CustomBitboardBoard board):
     cdef CGameState root_state
     memcpy(root_state.bitboards,    board._bb,       12 * sizeof(unsigned long long))
     memcpy(root_state.occupancies,  board._occ,       3 * sizeof(unsigned long long))
-    memcpy(root_state.piece_map,    board.piece_map, 64 * sizeof(int))
+    memcpy(root_state.piece_map,    board.piece_map, 64 * sizeof(signed char))
     root_state.side_to_move    = board.side_to_move
     root_state.castling_rights = board.castling_rights
     root_state.en_passant_sq   = board.en_passant_sq
@@ -1947,7 +1947,7 @@ def run_perft_copymake(CustomBitboardBoard board, int depth):
     cdef CGameState root_state
     memcpy(root_state.bitboards,    board._bb,       12 * sizeof(unsigned long long))
     memcpy(root_state.occupancies,  board._occ,       3 * sizeof(unsigned long long))
-    memcpy(root_state.piece_map,    board.piece_map, 64 * sizeof(int))
+    memcpy(root_state.piece_map,    board.piece_map, 64 * sizeof(signed char))
     root_state.side_to_move    = board.side_to_move
     root_state.castling_rights = board.castling_rights
     root_state.en_passant_sq   = board.en_passant_sq
@@ -1968,7 +1968,7 @@ def run_perft_copymake_divide(CustomBitboardBoard board, int depth):
     cdef CGameState root_state
     memcpy(root_state.bitboards,    board._bb,       12 * sizeof(unsigned long long))
     memcpy(root_state.occupancies,  board._occ,       3 * sizeof(unsigned long long))
-    memcpy(root_state.piece_map,    board.piece_map, 64 * sizeof(int))
+    memcpy(root_state.piece_map,    board.piece_map, 64 * sizeof(signed char))
     root_state.side_to_move    = board.side_to_move
     root_state.castling_rights = board.castling_rights
     root_state.en_passant_sq   = board.en_passant_sq

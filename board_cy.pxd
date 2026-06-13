@@ -4,16 +4,16 @@
 cdef struct CGameState:
     unsigned long long bitboards[12]
     unsigned long long occupancies[3]
-    int side_to_move
-    int castling_rights
-    int en_passant_sq
-    int halfmove_clock
-    int fullmove_number
-    int piece_map[64]
     unsigned long long zobrist_key
     int score_mg
     int score_eg
     int phase
+    unsigned short fullmove_number
+    unsigned char side_to_move
+    unsigned char castling_rights
+    unsigned char en_passant_sq
+    unsigned char halfmove_clock
+    signed char piece_map[64]
 
 cdef struct CMoveList:
     int moves[256]
@@ -26,7 +26,7 @@ cdef class CustomBitboardBoard:
     cdef public int halfmove_clock
     cdef public int fullmove_number
     cdef public unsigned long long zobrist_key
-    cdef int piece_map[64]
+    cdef signed char piece_map[64]
     cdef CGameState _history[512]
     cdef int _history_len
     cdef unsigned long long _bb[12]
