@@ -1881,6 +1881,11 @@ cdef class CustomBitboardBoard:
         """Exposes history depth for compatibility (read-only)."""
         return list(range(self._history_len))  # length proxy, not the real structs
 
+    @property
+    def history_keys(self):
+        cdef int i
+        return [self._history[i].zobrist_key for i in range(self._history_len)]
+
     cdef long long _run_perft_recursive_c(self, int depth) noexcept nogil:
         cdef CMoveList moves
         moves.count = 0

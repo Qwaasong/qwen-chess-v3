@@ -285,7 +285,10 @@ def main() -> None:
                         target = 2.0
                 
                 # Signal transition: dynamically set the engine time limit
-                engine.info.time_limit = (elapsed + target) * 1000.0
+                if getattr(engine, "USING_CYTHON", False):
+                    engine.info.time_limit = (elapsed + target) * 1000.0  # ms
+                else:
+                    engine.info.time_limit = elapsed + target  # seconds
 
         elif command == "stop":
             is_pondering = False

@@ -47,6 +47,15 @@ cdef int BLACK = 1
 cdef int INFINITE = 10000000
 cdef int MATE_THRESHOLD = 90000
 
+cdef int FLAG_NORMAL = 0
+cdef int FLAG_DOUBLE_PUSH = 1
+cdef int FLAG_CASTLE = 2
+cdef int FLAG_EP = 3
+cdef int FLAG_PROMOTE_N = 8
+cdef int FLAG_PROMOTE_B = 9
+cdef int FLAG_PROMOTE_R = 10
+cdef int FLAG_PROMOTE_Q = 11
+
 cdef int PIECE_VALUES[6]
 PIECE_VALUES[0] = 100
 PIECE_VALUES[1] = 320
@@ -711,10 +720,10 @@ cdef int next_qmove(QMovePicker *qmp, CustomBitboardBoard board) noexcept nogil:
                     score = get_mvv_lva_score(board, move)
                     to_sq = (move >> 6) & 0x3F
                     flag = (move >> 12) & 0x0F
-                    is_cap = flag == 3 or (board.piece_map[to_sq] != -1)
+                    is_cap = flag == FLAG_EP or (board.piece_map[to_sq] != -1)
                     if is_cap:
                         score += 10000
-                    elif flag >= 8:
+                    elif flag >= FLAG_PROMOTE_N:
                         score += 9000
                     qmp.moves.moves[i].move = move
                     qmp.moves.moves[i].score = score
@@ -725,9 +734,11 @@ cdef int next_qmove(QMovePicker *qmp, CustomBitboardBoard board) noexcept nogil:
                 board._generate_captures_c(&raw_moves)
                 for i in range(raw_moves.count):
                     move = raw_moves.moves[i]
-                    qmp.moves.moves[i].move = move
-                    qmp.moves.moves[i].score = get_mvv_lva_score(board, move)
-                qmp.moves.count = raw_moves.count
+                    if static_exchange_evaluation(board, move) < 0:
+                        continue
+                    qmp.moves.moves[qmp.moves.count].move = move
+                    qmp.moves.moves[qmp.moves.count].score = get_mvv_lva_score(board, move)
+                    qmp.moves.count += 1
                 sort_moves(&qmp.moves)
 
         elif qmp.stage == QSTAGE_CAPTURES:
@@ -1139,10 +1150,10 @@ cdef void make_move_on_state(CGameState *state, int move) noexcept nogil:
 
     cdef int cap_ep_sq, ep_pawn_idx, prom_offset, p_prom
 
-    if flag == 1:  # FLAG_DOUBLE_PUSH = 1
+    if flag == FLAG_DOUBLE_PUSH:
         state.en_passant_sq = from_sq + 8 if side == WHITE else from_sq - 8
         state.halfmove_clock = 0
-    elif flag == 3:  # FLAG_EP = 3
+    elif flag == FLAG_EP:
         cap_ep_sq   = to_sq - 8 if side == WHITE else to_sq + 8
         ep_pawn_idx = 6 if side == WHITE else 0 # P_p=6, P_P=0
         # Update evaluation: remove captured EP pawn
@@ -1152,7 +1163,7 @@ cdef void make_move_on_state(CGameState *state, int move) noexcept nogil:
         state.bitboards[ep_pawn_idx] = state.bitboards[ep_pawn_idx] & ~(<unsigned long long>1 << cap_ep_sq)
         state.piece_map[cap_ep_sq] = -1
         state.halfmove_clock = 0
-    elif flag == 2:  # FLAG_CASTLE = 2
+    elif flag == FLAG_CASTLE:
         if to_sq == 6: # G1 = 6
             # Update evaluation: White castle rook from H1 to F1
             remove_piece_eval(3, 7, &state.score_mg, &state.score_eg, &state.phase)
@@ -1191,12 +1202,12 @@ cdef void make_move_on_state(CGameState *state, int move) noexcept nogil:
             state.piece_map[56] = -1; state.piece_map[59] = 9
 
     # Place piece at destination (with promotion)
-    if flag >= 8:  # FLAG_PROMOTE_N = 8
+    if flag >= FLAG_PROMOTE_N:
         prom_offset = 0 if side == WHITE else 6
-        if   flag == 11: p_prom = 4 + prom_offset # P_Q = 4
-        elif flag == 10: p_prom = 3 + prom_offset # P_R = 3
-        elif flag == 9:  p_prom = 2 + prom_offset # P_B = 2
-        else:            p_prom = 1 + prom_offset # P_N = 1
+        if   flag == FLAG_PROMOTE_Q: p_prom = 4 + prom_offset # P_Q = 4
+        elif flag == FLAG_PROMOTE_R: p_prom = 3 + prom_offset # P_R = 3
+        elif flag == FLAG_PROMOTE_B: p_prom = 2 + prom_offset # P_B = 2
+        else:                        p_prom = 1 + prom_offset # P_N = 1
 
         # Update evaluation: add promoted piece to destination square
         add_piece_eval(p_prom, to_sq, &state.score_mg, &state.score_eg, &state.phase)
@@ -1231,10 +1242,10 @@ cdef void make_move_on_state(CGameState *state, int move) noexcept nogil:
     state.occupancies[side] = state.occupancies[side] & ~(<unsigned long long>1 << from_sq)
     if cap != -1:
         state.occupancies[opp_side] = state.occupancies[opp_side] & ~(<unsigned long long>1 << to_sq)
-    if flag == 3:  # FLAG_EP = 3
+    if flag == FLAG_EP:
         cap_ep_sq = to_sq - 8 if side == WHITE else to_sq + 8
         state.occupancies[opp_side] = state.occupancies[opp_side] & ~(<unsigned long long>1 << cap_ep_sq)
-    elif flag == 2:  # FLAG_CASTLE = 2
+    elif flag == FLAG_CASTLE:
         if to_sq == 6: # G1 = 6
             state.occupancies[0] = state.occupancies[0] & ~(<unsigned long long>1 << 7)
             state.occupancies[0] = state.occupancies[0] | (<unsigned long long>1 << 5)
@@ -1273,10 +1284,6 @@ cdef bint is_state_legal(CGameState *state, CustomBitboardBoard shell, int side_
     cdef int opponent = BLACK if side_that_moved == WHITE else WHITE
     return not cy_is_square_attacked(state.bitboards, state.occupancies[2], king_sq, opponent)
 
-def clear_tt():
-    """Clears the Transposition Table memory."""
-    memset(_tt, 0, sizeof(_tt))
-
 # --- Evaluation ---
 cdef int evaluate(CustomBitboardBoard board) nogil:
     """Static evaluation of the board with Tapered Evaluation (Middlegame vs Endgame)."""
@@ -1303,7 +1310,7 @@ cdef int get_mvv_lva_score(CustomBitboardBoard board, int move) nogil:
     cdef int victim_val = 0
     cdef int victim
 
-    if flag == 3:  # FLAG_EP = 3
+    if flag == FLAG_EP:
         victim_val = PIECE_VALUES[0]
     else:
         victim = board.piece_map[to_sq]
@@ -1312,16 +1319,56 @@ cdef int get_mvv_lva_score(CustomBitboardBoard board, int move) nogil:
         victim_val = PIECE_VALUES[victim % 6]
 
     cdef int score = victim_val * 10 - attacker_val
-    if flag >= 8:  # FLAG_PROMOTE_N
-        if flag == 11:    # FLAG_PROMOTE_Q
+    if flag >= FLAG_PROMOTE_N:
+        if flag == FLAG_PROMOTE_Q:
             score += 9000
-        elif flag == 10:  # FLAG_PROMOTE_R
+        elif flag == FLAG_PROMOTE_R:
             score += 5000
-        elif flag == 9:   # FLAG_PROMOTE_B
+        elif flag == FLAG_PROMOTE_B:
             score += 3300
         else:
             score += 3200
     return score
+
+cdef int static_exchange_evaluation(CustomBitboardBoard board, int move) noexcept nogil:
+    cdef int SEE_VALUES[7]
+    SEE_VALUES[0] = 100
+    SEE_VALUES[1] = 320
+    SEE_VALUES[2] = 330
+    SEE_VALUES[3] = 500
+    SEE_VALUES[4] = 900
+    SEE_VALUES[5] = 20000
+    SEE_VALUES[6] = 0
+
+    cdef int to_sq = (move >> 6) & 0x3F
+    cdef int from_sq = move & 0x3F
+    cdef int flag = (move >> 12) & 0x0F
+
+    cdef int victim_piece, attacker_piece
+    cdef int captured_val = 0
+    cdef int attacker_val = 0
+
+    if flag == FLAG_EP:
+        captured_val = 100  # pawn
+    else:
+        victim_piece = board.piece_map[to_sq]
+        if victim_piece == -1:
+            return 0
+        captured_val = SEE_VALUES[victim_piece % 6]
+
+    attacker_piece = board.piece_map[from_sq]
+    if attacker_piece == -1:
+        return 0
+    attacker_val = SEE_VALUES[attacker_piece % 6]
+
+    if captured_val >= attacker_val:
+        return captured_val - attacker_val
+
+    cdef int opp_side = BLACK if board.side_to_move == WHITE else WHITE
+    if cy_is_square_attacked(board._bb, board._occ[2], to_sq, opp_side):
+        return captured_val - attacker_val
+
+    return captured_val
 
 # --- Quiescence Search ---
 cdef int quiescence(
@@ -1692,7 +1739,7 @@ def get_best_move_cy(
     # Initialize and populate game history array for repetition check
     cdef unsigned long long search_history[1024]
     cdef int root_history_len = board._history_len
-    cdef int i_hist
+    cdef int i_hist, j_hist
     for i_hist in range(root_history_len):
         search_history[i_hist] = board._history[i_hist].zobrist_key
 
@@ -1727,6 +1774,11 @@ def get_best_move_cy(
     while not info.stop:
         if depth_limit > 0 and depth > depth_limit:
             break
+
+        # Age history moves (decay by 50% at the start of each iteration)
+        for i_hist in range(12):
+            for j_hist in range(64):
+                history_moves[i_hist][j_hist] //= 2
 
         info.current_depth = depth
         if depth < 5:

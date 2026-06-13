@@ -4,7 +4,10 @@
 a = Analysis(
     ['uci.py'],
     pathex=['.'],
-    binaries=[],
+    binaries=[
+        ('board_cy.cp312-win_amd64.pyd', '.'),
+        ('engine_cy.cp312-win_amd64.pyd', '.'),
+    ],
     datas=[],
     hiddenimports=[],
     hookspath=[],

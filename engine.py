@@ -558,6 +558,40 @@ def get_mvv_lva_score(board: CustomBitboardBoard, move: int) -> int:
     return score
 
 
+# Piece values for SEE (simpler, material-only)
+SEE_VALUES = [100, 320, 330, 500, 900, 20000, 0]  # P, N, B, R, Q, K, none
+
+def static_exchange_evaluation(board: CustomBitboardBoard, move: int) -> int:
+    """Estimate the material exchange value of a capture move.
+    Returns positive if winning capture, negative if losing.
+    """
+    to_sq = get_move_dest(move)
+    from_sq = get_move_source(move)
+    flag = get_move_flag(move)
+
+    if flag == FLAG_EP:
+        captured_val = SEE_VALUES[0]  # pawn
+    else:
+        victim = board.get_piece_at(to_sq)
+        if victim is None:
+            return 0
+        captured_val = SEE_VALUES[victim % 6]
+
+    attacker = board.get_piece_at(from_sq)
+    if attacker is None:
+        return 0
+    attacker_val = SEE_VALUES[attacker % 6]
+
+    if captured_val >= attacker_val:
+        return captured_val - attacker_val
+
+    opp_side = BLACK if board.side_to_move == WHITE else WHITE
+    if board.is_square_attacked(to_sq, opp_side):
+        return captured_val - attacker_val
+
+    return captured_val
+
+
 # --- Quiescence Search ---
 def quiescence(
     board: CustomBitboardBoard,
@@ -600,6 +634,9 @@ def quiescence(
             is_cap = flag == FLAG_EP or (board.get_piece_at(to_sq) is not None)
 
             if is_cap:
+                # Prune captures that are static losses (SEE < 0)
+                if static_exchange_evaluation(board, move) < 0:
+                    continue
                 score = get_mvv_lva_score(board, move)
                 moves_to_search.append((score, move))
             elif qdepth < 1:
@@ -631,6 +668,21 @@ def quiescence(
     return alpha
 
 
+def is_repetition(board: CustomBitboardBoard) -> bool:
+    key = board.zobrist_key
+    halfmove = board.halfmove_clock
+    keys = board.history_keys
+    hist_len = len(keys)
+    limit = hist_len - halfmove
+    if limit < 0:
+        limit = 0
+    # Search backwards from hist_len - 2 down to limit with step -2
+    for i in range(hist_len - 2, limit - 1, -2):
+        if keys[i] == key:
+            return True
+    return False
+
+
 # --- Negamax Search ---
 def negamax(
     board: CustomBitboardBoard,
@@ -644,6 +696,11 @@ def negamax(
 ) -> int:
     """Recursively searches the game tree using Alpha-Beta Negamax algorithm."""
     info.nodes += 1
+
+    # --- Draw detection ---
+    if ply > 0:
+        if board.halfmove_clock >= 100 or is_repetition(board):
+            return 0
 
     if info.nodes % 4096 == 0:
         if time.time() - info.start_time > info.time_limit:
@@ -809,7 +866,7 @@ def negamax(
         else:
             # --- Late Move Reductions (LMR) ---
             if (depth >= 2 and 
-                legal_moves_searched > 1 and 
+                legal_moves_searched > 4 and 
                 not is_cap and 
                 flag < FLAG_PROMOTE_N and 
                 not in_check):
@@ -943,6 +1000,12 @@ def get_best_move(
     while not info.stop:
         if depth_limit > 0 and depth > depth_limit:
             break
+
+        # Age history moves (decay by 50% at the start of each iteration)
+        for i in range(12):
+            for j in range(64):
+                history_moves[i][j] //= 2
+
         info.current_depth = depth
         if depth < 5:
             negamax(board, depth, -INFINITE, INFINITE, color, 0, 0, -1)
@@ -1021,6 +1084,7 @@ def get_best_move(
 # --- Cython Engine Wrapper & Fallback ---
 try:
     import engine_cy
+    USING_CYTHON = True
 
     _get_best_move_cy = engine_cy.get_best_move_cy
 
@@ -1083,6 +1147,8 @@ try:
     def get_ponder_move_uci(chess_board):
         return engine_cy.get_ponder_move_uci(chess_board)
 except ImportError:
+    USING_CYTHON = False
+
     def clear_tt():
         global tt
         tt.clear()

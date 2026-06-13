@@ -435,6 +435,10 @@ class CustomBitboardBoard:
         self.piece_map: list[int | None] = [None] * 64
         self.zobrist_key = 0
 
+    @property
+    def history_keys(self) -> list[int]:
+        return [state.zobrist_key for state in self.history]
+
     def _recompute_zobrist(self) -> int:
         key = 0
         for sq in range(64):
