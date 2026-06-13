@@ -254,6 +254,7 @@ killer_moves = [[0] * 64 for _ in range(2)]
 history_moves = [[0] * 64 for _ in range(12)]
 counter_moves = [[-1] * 64 for _ in range(12)]
 LMR_REDUCTIONS = [[0] * 64 for _ in range(64)]
+static_evals = [0] * 256
 
 def init_lmr_reductions():
     import math
@@ -585,6 +586,10 @@ def quiescence(
             is_cap = flag == FLAG_EP or (board.get_piece_at(to_sq) is not None)
 
             if is_cap:
+                captured_piece = board.get_piece_at(to_sq)
+                captured_val = PIECE_VALUES[captured_piece] if captured_piece is not None else 100
+                if stand_pat + captured_val + 154 <= alpha:
+                    continue
                 score = get_mvv_lva_score(board, move)
                 moves_to_search.append((score, move))
             elif qdepth < 1:
@@ -669,9 +674,32 @@ def negamax(
                 return val
         tt_move = tt_entry.get('move')
 
+    global static_evals
+    static_eval = color * evaluate(board)
+    if ply < 256:
+        static_evals[ply] = static_eval
+
+    improving = False
+    if ply >= 2 and not in_check:
+        improving = static_eval > static_evals[ply - 2]
+
+    # --- Razoring ---
+    pv_node = (beta - alpha) > 1
+    if (not pv_node and 
+        not in_check and 
+        depth <= 3 and 
+        static_eval + 531 <= alpha):
+        
+        if depth <= 1:
+            return quiescence(board, alpha - 1, alpha, color, ply, 0)
+        
+        rbeta = alpha - 531
+        v = quiescence(board, rbeta - 1, rbeta, color, ply, 0)
+        if v < rbeta:
+            return v
+
     # --- Null Move Pruning (NMP) ---
     has_non_pawn = False
-    static_eval = color * evaluate(board)
     if (depth >= 3 and 
         not in_check and 
         ply > 0 and 
@@ -789,6 +817,48 @@ def negamax(
         
         legal_moves_searched += 1
 
+        # --- Futility Pruning ---
+        if (legal_moves_searched > 1 and
+            not in_check and
+            not is_cap and
+            flag < FLAG_PROMOTE_N and
+            depth < 16):
+            
+            # Simple Futility Pruning (Child node futility margin)
+            if depth < 4:
+                margin = 217 * (depth - (1 if improving else 0))
+                if static_eval + margin <= alpha:
+                    board.unmake_move()
+                    continue
+            
+            # Parent Node Futility Pruning
+            r_val = LMR_REDUCTIONS[depth][legal_moves_searched] if legal_moves_searched < 64 else LMR_REDUCTIONS[depth][63]
+            r_int = r_val // 1024
+            if pv_node:
+                r_int -= 1
+            if move == killer_moves[0][ply] or move == killer_moves[1][ply]:
+                r_int -= 1
+            
+            p_type = board.get_piece_at(to_sq)
+            if p_type is not None:
+                if history_moves[p_type][to_sq] > 2800:
+                    r_int -= 1
+                elif history_moves[p_type][to_sq] < 600:
+                    r_int += 1
+            
+            if r_int < 0:
+                r_int = 0
+            
+            lmrDepth = depth - 1 - r_int
+            if lmrDepth < 0:
+                lmrDepth = 0
+            
+            futility_limit = (5 + depth * depth) * (1 + (1 if improving else 0)) // 2 - 1
+            if (static_eval + 235 + 172 * lmrDepth <= alpha and 
+                legal_moves_searched >= futility_limit):
+                board.unmake_move()
+                continue
+
         if legal_moves_searched == 1:
             val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move)
         else:
@@ -811,9 +881,9 @@ def negamax(
                 
                 p_type = board.get_piece_at(to_sq) # the piece is already moved to to_sq
                 if p_type is not None:
-                    if history_moves[p_type][to_sq] > 3000:
+                    if history_moves[p_type][to_sq] > 2800:
                         r_int -= 1
-                    elif history_moves[p_type][to_sq] < 500:
+                    elif history_moves[p_type][to_sq] < 600:
                         r_int += 1
 
                 if r_int < 1:
@@ -911,10 +981,11 @@ def get_best_move(
     # 3. Convert python-chess Board to CustomBitboardBoard
     board = CustomBitboardBoard.from_chess_board(chess_board)
 
-    global killer_moves, history_moves, counter_moves
+    global killer_moves, history_moves, counter_moves, static_evals
     killer_moves = [[0] * 64 for _ in range(2)]
     history_moves = [[0] * 64 for _ in range(12)]
     counter_moves = [[-1] * 64 for _ in range(12)]
+    static_evals = [0] * 256
 
     legal_moves = board.generate_legal_moves()
     if not legal_moves:

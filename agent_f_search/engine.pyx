@@ -375,6 +375,7 @@ cdef TTEntry _tt[TT_SIZE]
 cdef int killer_moves[2][64]
 cdef int history_moves[12][64]
 cdef int counter_moves[12][64]
+cdef int static_evals[256]
 
 # LMR Reductions
 cdef int LMR_REDUCTIONS[64][64]
@@ -835,8 +836,8 @@ cdef int negamax_copymake(
             return 0
 
     cdef int alpha_orig = alpha
-    cdef bint in_check
-    cdef int extended = 0
+    cdef bint in_check, improving
+    cdef int extended = 0, rbeta = 0
     cdef unsigned long long key
     cdef unsigned int idx
     cdef TTEntry *entry
@@ -849,7 +850,7 @@ cdef int negamax_copymake(
     cdef int prev_to, prev_piece
     cdef MovePicker mp
     cdef int legal_moves_searched = 0
-    cdef int r_val, r_int
+    cdef int r_val, r_int, margin = 0, futility_limit = 0, lmrDepth = 0
     cdef bint pv_node = (beta - alpha) > 1
     cdef int move, from_sq, to_sq, flag, best_val = -INFINITE, best_move = -1, static_eval
     cdef bint is_cap
@@ -890,8 +891,31 @@ cdef int negamax_copymake(
                 return val
         tt_move = entry.move
 
-    # --- Null Move Pruning (NMP) ---
     static_eval = color * evaluate_state(state)
+    if ply < 256:
+        static_evals[ply] = static_eval
+
+    improving = False
+    if ply >= 2 and not in_check:
+        improving = static_eval > static_evals[ply - 2]
+
+    # --- Razoring ---
+    if (not pv_node and 
+        not in_check and 
+        depth <= 3 and 
+        static_eval + 531 <= alpha):
+        
+        load_state_to_shell(state, shell)
+        if depth <= 1:
+            return quiescence(shell, alpha - 1, alpha, color, ply, 0)
+        
+        rbeta = alpha - 531
+        v = quiescence(shell, rbeta - 1, rbeta, color, ply, 0)
+        if v < rbeta:
+            return v
+
+    # --- Null Move Pruning (NMP) ---
+    has_non_pawn = False
     if (depth >= 3 and 
         not in_check and 
         ply > 0 and 
@@ -985,6 +1009,46 @@ cdef int negamax_copymake(
         
         legal_moves_searched += 1
 
+        # --- Futility Pruning ---
+        if (legal_moves_searched > 1 and
+            not in_check and
+            not is_cap and
+            flag < 8 and
+            depth < 16):
+            
+            # Simple Futility Pruning (Child node futility margin)
+            if depth < 4:
+                margin = 217 * (depth - (1 if improving else 0))
+                if static_eval + margin <= alpha:
+                    continue
+            
+            # Parent Node Futility Pruning
+            r_val = LMR_REDUCTIONS[depth][legal_moves_searched] if legal_moves_searched < 64 else LMR_REDUCTIONS[depth][63]
+            r_int = r_val // 1024
+            if pv_node:
+                r_int -= 1
+            if move == killer_moves[0][ply] or move == killer_moves[1][ply]:
+                r_int -= 1
+            
+            p_type = child_state.piece_map[to_sq]
+            if p_type != -1:
+                if history_moves[p_type][to_sq] > 2800:
+                    r_int -= 1
+                elif history_moves[p_type][to_sq] < 600:
+                    r_int += 1
+            
+            if r_int < 0:
+                r_int = 0
+            
+            lmrDepth = depth - 1 - r_int
+            if lmrDepth < 0:
+                lmrDepth = 0
+            
+            futility_limit = (5 + depth * depth) * (1 + (1 if improving else 0)) // 2 - 1
+            if (static_eval + 235 + 172 * lmrDepth <= alpha and 
+                legal_moves_searched >= futility_limit):
+                continue
+
         if legal_moves_searched == 1:
             val = -negamax_copymake(&child_state, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move, shell, search_history, root_history_len)
         else:
@@ -1007,9 +1071,9 @@ cdef int negamax_copymake(
                 
                 p_type = child_state.piece_map[to_sq] # the piece is already moved to to_sq
                 if p_type != -1:
-                    if history_moves[p_type][to_sq] > 3000:
+                    if history_moves[p_type][to_sq] > 2800:
                         r_int -= 1
-                    elif history_moves[p_type][to_sq] < 500:
+                    elif history_moves[p_type][to_sq] < 600:
                         r_int += 1
 
                 if r_int < 1:
@@ -1349,10 +1413,22 @@ cdef int quiescence(
     cdef int move, val
     cdef int legal_moves_searched = 0
 
+    cdef int to_sq, flag, captured_piece, captured_val
+    cdef bint is_cap
     while True:
         move = next_qmove(&qmp, board)
         if move == -1:
             break
+
+        if not in_check:
+            to_sq = (move >> 6) & 0x3F
+            flag = (move >> 12) & 0x0F
+            is_cap = flag == 3 or (board.piece_map[to_sq] != -1)
+            if is_cap:
+                captured_piece = board.piece_map[to_sq]
+                captured_val = PIECE_VALUES[captured_piece % 6] if captured_piece != -1 else 100
+                if stand_pat + captured_val + 154 <= alpha:
+                    continue
 
         if not board.make_move_c(move):
             board.unmake_move_c()
@@ -1403,6 +1479,13 @@ cdef int negamax(
 
     cdef int alpha_orig = alpha
     cdef bint in_check = board.in_check_c()
+    cdef bint improving = False
+    cdef bint pv_node = (beta - alpha) > 1
+    cdef int rbeta = 0
+    cdef int margin = 0
+    cdef int futility_limit = 0
+    cdef int lmrDepth = 0
+    cdef int static_eval = 0
 
     # Check Extensions
     cdef int extended = 0
@@ -1437,10 +1520,31 @@ cdef int negamax(
                 return val
         tt_move = entry.move
 
+    static_eval = color * evaluate(board)
+    if ply < 256:
+        static_evals[ply] = static_eval
+
+    improving = False
+    if ply >= 2 and not in_check:
+        improving = static_eval > static_evals[ply - 2]
+
+    # --- Razoring ---
+    if (not pv_node and 
+        not in_check and 
+        depth <= 3 and 
+        static_eval + 531 <= alpha):
+        
+        if depth <= 1:
+            return quiescence(board, alpha - 1, alpha, color, ply, 0)
+        
+        rbeta = alpha - 531
+        v = quiescence(board, rbeta - 1, rbeta, color, ply, 0)
+        if v < rbeta:
+            return v
+
     # --- Null Move Pruning (NMP) ---
     cdef bint has_non_pawn = False
     cdef int p, R
-    cdef int static_eval = color * evaluate(board)
     if (depth >= 3 and 
         not in_check and 
         ply > 0 and 
@@ -1518,7 +1622,7 @@ cdef int negamax(
 
     cdef int legal_moves_searched = 0
     cdef int r_val, r_int
-    cdef bint pv_node = (beta - alpha) > 1
+    pv_node = (beta - alpha) > 1
 
     cdef int move, from_sq, to_sq, flag, best_val = -INFINITE, best_move = -1
     cdef bint is_cap
@@ -1539,6 +1643,48 @@ cdef int negamax(
             continue
         
         legal_moves_searched += 1
+
+        # --- Futility Pruning ---
+        if (legal_moves_searched > 1 and
+            not in_check and
+            not is_cap and
+            flag < 8 and
+            depth < 16):
+            
+            # Simple Futility Pruning (Child node futility margin)
+            if depth < 4:
+                margin = 217 * (depth - (1 if improving else 0))
+                if static_eval + margin <= alpha:
+                    board.unmake_move_c()
+                    continue
+            
+            # Parent Node Futility Pruning
+            r_val = LMR_REDUCTIONS[depth][legal_moves_searched] if legal_moves_searched < 64 else LMR_REDUCTIONS[depth][63]
+            r_int = r_val // 1024
+            if pv_node:
+                r_int -= 1
+            if move == killer_moves[0][ply] or move == killer_moves[1][ply]:
+                r_int -= 1
+            
+            p_type = board.piece_map[to_sq]
+            if p_type != -1:
+                if history_moves[p_type][to_sq] > 2800:
+                    r_int -= 1
+                elif history_moves[p_type][to_sq] < 600:
+                    r_int += 1
+            
+            if r_int < 0:
+                r_int = 0
+            
+            lmrDepth = depth - 1 - r_int
+            if lmrDepth < 0:
+                lmrDepth = 0
+            
+            futility_limit = (5 + depth * depth) * (1 + (1 if improving else 0)) // 2 - 1
+            if (static_eval + 235 + 172 * lmrDepth <= alpha and 
+                legal_moves_searched >= futility_limit):
+                board.unmake_move_c()
+                continue
 
         if legal_moves_searched == 1:
             val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move, search_history, root_history_len)
@@ -1562,9 +1708,9 @@ cdef int negamax(
                 
                 p_type = board.piece_map[to_sq] # the piece is already moved to to_sq
                 if p_type != -1:
-                    if history_moves[p_type][to_sq] > 3000:
+                    if history_moves[p_type][to_sq] > 2800:
                         r_int -= 1
-                    elif history_moves[p_type][to_sq] < 500:
+                    elif history_moves[p_type][to_sq] < 600:
                         r_int += 1
 
                 if r_int < 1:
@@ -1672,6 +1818,7 @@ def get_best_move_cy(
     memset(killer_moves, 0, sizeof(killer_moves))
     memset(history_moves, 0, sizeof(history_moves))
     memset(counter_moves, -1, sizeof(counter_moves))
+    memset(static_evals, 0, sizeof(static_evals))
 
     cdef CMoveList legal_moves
     legal_moves.count = 0
