@@ -854,8 +854,7 @@ cdef inline void remove_piece_eval(int piece, int sq, int *score_mg, int *score_
 # No Python allocator involvement, no reference counting, no GIL for copy.
 # ---------------------------------------------------------------------------
 cdef struct CGameState:
-    unsigned long long bitboards[12]   # piece bitboards (white P..K, black p..k)
-    unsigned long long occupancies[3]  # [WHITE, BLACK, BOTH]
+    int move
     unsigned long long zobrist_key
     int score_mg
     int score_eg
@@ -865,29 +864,7 @@ cdef struct CGameState:
     unsigned char castling_rights
     unsigned char en_passant_sq
     unsigned char halfmove_clock
-    signed char piece_map[64]                  # piece index per square; -1 = empty
-
-
-# ---------------------------------------------------------------------------
-# Helper: copy CGameState fields to/from CustomBitboardBoard
-# ---------------------------------------------------------------------------
-cdef inline void _save_state(CGameState *slot,
-                              unsigned long long *bbs_py,
-                              unsigned long long *occ_py,
-                              int side, int castle, int ep,
-                              int half, int full,
-                              signed char *pm,
-                              unsigned long long zobrist) noexcept nogil:
-    """Write board state into a CGameState slot (pure C, no GIL)."""
-    memcpy(slot.bitboards,    bbs_py, 12 * sizeof(unsigned long long))
-    memcpy(slot.occupancies,  occ_py,  3 * sizeof(unsigned long long))
-    memcpy(slot.piece_map,    pm,     64 * sizeof(signed char))
-    slot.side_to_move    = side
-    slot.castling_rights = castle
-    slot.en_passant_sq   = ep
-    slot.halfmove_clock  = half
-    slot.fullmove_number = full
-    slot.zobrist_key     = zobrist
+    signed char captured_piece
 
 
 cdef inline void cy_add_move(CMoveList *ml, int m) noexcept nogil:
@@ -1017,6 +994,15 @@ cdef class CustomBitboardBoard:
         """Returns piece index (0-11) at square, or None if empty. O(1)."""
         cdef int p = self.piece_map[square]
         return None if p == -1 else p
+
+    def recompute_zobrist_py(self):
+        return self._recompute_zobrist()
+
+    def recompute_eval_py(self):
+        recompute_board_eval(self)
+
+    def get_piece_popcounts(self):
+        return [cy_popcount_board(self._bb[i]) for i in range(12)]
 
     cdef bint is_square_attacked_c(self, int sq, int attacker_color) noexcept nogil:
         """Returns True if sq is attacked by any piece of attacker_color (C-only)."""
@@ -1549,7 +1535,7 @@ cdef class CustomBitboardBoard:
             m = pseudo.moves[i]
             if self.make_move_c(m):
                 cy_add_move(legal_moves, m)
-            self.unmake_move_c()
+                self.unmake_move_c()
 
     cpdef list generate_legal_moves(self):
         """Generates strictly legal moves (list wrapper)."""
@@ -1571,11 +1557,16 @@ cdef class CustomBitboardBoard:
         if self._history_len >= MAX_HISTORY:
             return False  # stack overflow guard
 
+        # --- Decode move parameters ---
+        cdef int from_sq = cy_get_move_source(move)
+        cdef int to_sq   = cy_get_move_dest(move)
+        cdef int flag    = cy_get_move_flag(move)
+        cdef int side    = self.side_to_move
+        cdef int opp_side = 1 if side == 0 else 0
+
         # --- Save current state into C struct (no Python allocator) ---
         cdef CGameState *slot = &self._history[self._history_len]
-        memcpy(slot.bitboards,    self._bb,       12 * sizeof(unsigned long long))
-        memcpy(slot.occupancies,  self._occ,       3 * sizeof(unsigned long long))
-        memcpy(slot.piece_map,    self.piece_map, 64 * sizeof(signed char))
+        slot.move            = move
         slot.side_to_move    = self.side_to_move
         slot.castling_rights = self.castling_rights
         slot.en_passant_sq   = self.en_passant_sq
@@ -1585,22 +1576,26 @@ cdef class CustomBitboardBoard:
         slot.score_mg        = self.score_mg
         slot.score_eg        = self.score_eg
         slot.phase           = self.phase
+
+        # Determine and save captured piece
+        cdef int cap = -1
+        if flag == FLAG_EP:
+            cap = P_p if side == WHITE else P_P
+        else:
+            cap = self.piece_map[to_sq]
+        slot.captured_piece = cap
+
         self._history_len += 1
 
         # Record values to compute incremental changes
         cdef int old_ep = self.en_passant_sq
         cdef int old_castle = self.castling_rights
 
-        # --- Decode move ---
-        cdef int from_sq = cy_get_move_source(move)
-        cdef int to_sq   = cy_get_move_dest(move)
-        cdef int flag    = cy_get_move_flag(move)
-        cdef int side    = self.side_to_move
-        cdef int opp_side = 1 if side == 0 else 0
-
         # Direct C-array access — no Python object, no isinstance check
         cdef int mp = self.piece_map[from_sq]
         if mp == -1:
+            # Revert history push on invalid piece access
+            self._history_len -= 1
             return False
 
         # Update evaluation: remove moving piece from source square
@@ -1612,14 +1607,12 @@ cdef class CustomBitboardBoard:
         self._bb[mp] = cy_clear_bit(self._bb[mp], from_sq)
         self.piece_map[from_sq] = -1
 
-        cdef int cap = self.piece_map[to_sq]  # -1 if empty
-
         self.en_passant_sq = 64
         self.halfmove_clock += 1
         if side == BLACK:
             self.fullmove_number += 1
 
-        if cap != -1:
+        if cap != -1 and flag != FLAG_EP:
             # Update evaluation: remove captured piece from destination square
             remove_piece_eval(cap, to_sq, &self.score_mg, &self.score_eg, &self.phase)
 
@@ -1636,13 +1629,12 @@ cdef class CustomBitboardBoard:
             self.halfmove_clock = 0
         elif flag == FLAG_EP:
             cap_ep_sq   = to_sq - 8 if side == WHITE else to_sq + 8
-            ep_pawn_idx = P_p if side == WHITE else P_P
             # Update evaluation: remove captured EP pawn
-            remove_piece_eval(ep_pawn_idx, cap_ep_sq, &self.score_mg, &self.score_eg, &self.phase)
+            remove_piece_eval(cap, cap_ep_sq, &self.score_mg, &self.score_eg, &self.phase)
 
             # XOR out the captured en passant pawn
-            self.zobrist_key ^= ZOBRIST_PIECES[ep_pawn_idx][cap_ep_sq]
-            self._bb[ep_pawn_idx] = cy_clear_bit(self._bb[ep_pawn_idx], cap_ep_sq)
+            self.zobrist_key ^= ZOBRIST_PIECES[cap][cap_ep_sq]
+            self._bb[cap] = cy_clear_bit(self._bb[cap], cap_ep_sq)
             self.piece_map[cap_ep_sq] = -1
             self.halfmove_clock = 0
         elif flag == FLAG_CASTLE:
@@ -1728,7 +1720,7 @@ cdef class CustomBitboardBoard:
 
         # Incremental occupancy update
         self._occ[side] = cy_clear_bit(self._occ[side], from_sq)
-        if cap != -1:
+        if cap != -1 and flag != FLAG_EP:
             self._occ[opp_side] = cy_clear_bit(self._occ[opp_side], to_sq)
         if flag == FLAG_EP:
             cap_ep_sq = to_sq - 8 if side == WHITE else to_sq + 8
@@ -1772,7 +1764,8 @@ cdef class CustomBitboardBoard:
         cdef int king_piece_idx = 5 if friendly_side == 0 else 11
         cdef unsigned long long king_bb2 = self._bb[king_piece_idx]
         cdef int king_sq = cy_lsb(king_bb2)
-        if king_sq != -1 and self.is_square_attacked_c(king_sq, opp_side):
+        if king_sq == -1 or self.is_square_attacked_c(king_sq, opp_side):
+            self.unmake_move_c()
             return False
 
         return True
@@ -1784,9 +1777,7 @@ cdef class CustomBitboardBoard:
 
         # --- Save current state into C struct (no Python allocator) ---
         cdef CGameState *slot = &self._history[self._history_len]
-        memcpy(slot.bitboards,    self._bb,       12 * sizeof(unsigned long long))
-        memcpy(slot.occupancies,  self._occ,       3 * sizeof(unsigned long long))
-        memcpy(slot.piece_map,    self.piece_map, 64 * sizeof(signed char))
+        slot.move            = -1
         slot.side_to_move    = self.side_to_move
         slot.castling_rights = self.castling_rights
         slot.en_passant_sq   = self.en_passant_sq
@@ -1796,6 +1787,7 @@ cdef class CustomBitboardBoard:
         slot.score_mg        = self.score_mg
         slot.score_eg        = self.score_eg
         slot.phase           = self.phase
+        slot.captured_piece  = -1
         self._history_len += 1
 
         cdef int old_ep = self.en_passant_sq
@@ -1829,8 +1821,81 @@ cdef class CustomBitboardBoard:
             return
         self._history_len -= 1
         cdef CGameState *slot = &self._history[self._history_len]
+        cdef int move, from_sq, to_sq, flag, side, opp_side, moving_piece, pawn_piece, cap, cap_ep_sq
 
-        # Restore scalars
+        # If it was a null move, just restore the scalar fields
+        if slot.move == -1:
+            self.side_to_move    = slot.side_to_move
+            self.castling_rights = slot.castling_rights
+            self.en_passant_sq   = slot.en_passant_sq
+            self.halfmove_clock  = slot.halfmove_clock
+            self.fullmove_number = slot.fullmove_number
+            self.zobrist_key     = slot.zobrist_key
+            self.score_mg        = slot.score_mg
+            self.score_eg        = slot.score_eg
+            self.phase           = slot.phase
+            return
+
+        move = slot.move
+        from_sq = cy_get_move_source(move)
+        to_sq = cy_get_move_dest(move)
+        flag = cy_get_move_flag(move)
+        side = slot.side_to_move
+        opp_side = 1 if side == 0 else 0
+
+        # Undo friendly piece movement
+        moving_piece = self.piece_map[to_sq]
+
+        if flag >= FLAG_PROMOTE_N:
+            # Undo promotion: remove promoted piece, place original pawn back
+            self._bb[moving_piece] = cy_clear_bit(self._bb[moving_piece], to_sq)
+            self.piece_map[to_sq] = -1
+            pawn_piece = P_P if side == WHITE else P_p
+            self._bb[pawn_piece] = cy_set_bit(self._bb[pawn_piece], from_sq)
+            self.piece_map[from_sq] = pawn_piece
+        else:
+            # Move regular piece back
+            self._bb[moving_piece] = cy_clear_bit(self._bb[moving_piece], to_sq)
+            self._bb[moving_piece] = cy_set_bit(self._bb[moving_piece], from_sq)
+            self.piece_map[from_sq] = moving_piece
+            self.piece_map[to_sq] = -1
+
+        # Undo capture (restore captured piece)
+        cap = slot.captured_piece
+        if cap != -1:
+            if flag == FLAG_EP:
+                cap_ep_sq = to_sq - 8 if side == WHITE else to_sq + 8
+                self._bb[cap] = cy_set_bit(self._bb[cap], cap_ep_sq)
+                self.piece_map[cap_ep_sq] = cap
+            else:
+                self._bb[cap] = cy_set_bit(self._bb[cap], to_sq)
+                self.piece_map[to_sq] = cap
+
+        # Undo castling rook movement
+        if flag == FLAG_CASTLE:
+            if to_sq == G1:
+                self._bb[P_R] = cy_clear_bit(self._bb[P_R], F1)
+                self._bb[P_R] = cy_set_bit(self._bb[P_R], H1)
+                self.piece_map[F1] = -1; self.piece_map[H1] = P_R
+            elif to_sq == C1:
+                self._bb[P_R] = cy_clear_bit(self._bb[P_R], D1)
+                self._bb[P_R] = cy_set_bit(self._bb[P_R], A1)
+                self.piece_map[D1] = -1; self.piece_map[A1] = P_R
+            elif to_sq == G8:
+                self._bb[P_r] = cy_clear_bit(self._bb[P_r], F8)
+                self._bb[P_r] = cy_set_bit(self._bb[P_r], H8)
+                self.piece_map[F8] = -1; self.piece_map[H8] = P_r
+            elif to_sq == C8:
+                self._bb[P_r] = cy_clear_bit(self._bb[P_r], D8)
+                self._bb[P_r] = cy_set_bit(self._bb[P_r], A8)
+                self.piece_map[D8] = -1; self.piece_map[A8] = P_r
+
+        # Recompute occupancies
+        self._occ[0] = self._bb[P_P] | self._bb[P_N] | self._bb[P_B] | self._bb[P_R] | self._bb[P_Q] | self._bb[P_K]
+        self._occ[1] = self._bb[P_p] | self._bb[P_n] | self._bb[P_b] | self._bb[P_r] | self._bb[P_q] | self._bb[P_k]
+        self._occ[2] = self._occ[0] | self._occ[1]
+
+        # Restore scalar fields
         self.side_to_move    = slot.side_to_move
         self.castling_rights = slot.castling_rights
         self.en_passant_sq   = slot.en_passant_sq
@@ -1840,13 +1905,6 @@ cdef class CustomBitboardBoard:
         self.score_mg        = slot.score_mg
         self.score_eg        = slot.score_eg
         self.phase           = slot.phase
-
-        # Restore piece_map via memcpy — 64-byte copy, entirely in C
-        memcpy(self.piece_map, slot.piece_map, 64 * sizeof(signed char))
-
-        # Restore bitboards and occupancies (C array)
-        memcpy(self._bb,  slot.bitboards,   12 * sizeof(unsigned long long))
-        memcpy(self._occ, slot.occupancies,  3 * sizeof(unsigned long long))
 
     def to_chess_move(self, int move):
         """Converts packed move to python-chess Move."""
@@ -1898,14 +1956,14 @@ cdef class CustomBitboardBoard:
                 m = moves.moves[i]
                 if self.make_move_c(m):
                     nodes += 1
-                self.unmake_move_c()
+                    self.unmake_move_c()
             return nodes
 
         for i in range(moves.count):
             m = moves.moves[i]
             if self.make_move_c(m):
                 nodes += self._run_perft_recursive_c(depth - 1)
-            self.unmake_move_c()
+                self.unmake_move_c()
         return nodes
 
     cpdef long long run_perft_recursive(self, int depth):

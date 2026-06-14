@@ -62,13 +62,19 @@ def play_game(
         p.stdin.write("uci\n")
         p.stdin.flush()
         while True:
-            line = p.stdout.readline().strip()
+            line = p.stdout.readline()
+            if not line:
+                raise RuntimeError(f"Engine at {path} exited prematurely during uci handshake.")
+            line = line.strip()
             if line == "uciok":
                 break
         p.stdin.write("isready\n")
         p.stdin.flush()
         while True:
-            line = p.stdout.readline().strip()
+            line = p.stdout.readline()
+            if not line:
+                raise RuntimeError(f"Engine at {path} exited prematurely during isready check.")
+            line = line.strip()
             if line == "readyok":
                 break
         return p
@@ -107,7 +113,10 @@ def play_game(
             # Read engine output until bestmove
             move_uci = None
             while True:
-                line = current_proc.stdout.readline().strip()
+                line = current_proc.stdout.readline()
+                if not line:
+                    break
+                line = line.strip()
                 if line.startswith("bestmove"):
                     parts = line.split()
                     if len(parts) >= 2:

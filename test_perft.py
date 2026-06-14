@@ -112,15 +112,27 @@ def main() -> None:
     # ------------------------------------------------------------------
     print("\n--- Correctness Check ---")
     all_passed = True
-    board = chess.Board()
 
-    for depth, expected in PERFT_EXPECTED.items():
-        b = CustomBitboardBoard.from_chess_board(board)
-        result = b.run_perft_recursive(depth)
-        status = "PASSED" if result == expected else "FAILED"
-        if result != expected:
-            all_passed = False
-        print(f"  Perft {depth}: {result:>10,} (expected {expected:>10,}) [{status}]")
+    test_positions = [
+        ("Starting Position", "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", {1: 20, 2: 400, 3: 8902, 4: 197281, 5: 4865609}),
+        ("Kiwipete (Pos 2)", "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", {1: 48, 2: 2039, 3: 97862}),
+        ("Position 3", "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", {1: 14, 2: 191, 3: 2812, 4: 43238}),
+        ("Position 4", "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", {1: 6, 2: 264, 3: 9467, 4: 422333}),
+        ("Position 5", "rnbqkb1r/pp1ppp1p/6p1/2pP4/8/8/PPP1PPPP/RNBQKBNR w KQkq c6 0 2", {1: 30, 2: 630, 3: 18773})
+    ]
+
+    for name, fen, depths in test_positions:
+        print(f"  Testing {name}...")
+        board = chess.Board(fen)
+        for depth, expected in depths.items():
+            b = CustomBitboardBoard.from_chess_board(board)
+            result = b.run_perft_recursive(depth)
+            status = "PASSED" if result == expected else "FAILED"
+            if result != expected:
+                all_passed = False
+                print(f"    Perft {depth}: {result:>10,} (expected {expected:>10,}) [{status}]")
+            else:
+                print(f"    Perft {depth}: {result:>10,} [{status}]")
 
     print()
     if not all_passed:

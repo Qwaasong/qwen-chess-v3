@@ -2,8 +2,7 @@
 # Cython declarations for CustomBitboardBoard to allow direct C-level access from engine_cy.
 
 cdef struct CGameState:
-    unsigned long long bitboards[12]
-    unsigned long long occupancies[3]
+    int move
     unsigned long long zobrist_key
     int score_mg
     int score_eg
@@ -13,7 +12,7 @@ cdef struct CGameState:
     unsigned char castling_rights
     unsigned char en_passant_sq
     unsigned char halfmove_clock
-    signed char piece_map[64]
+    signed char captured_piece
 
 cdef struct CMoveList:
     int moves[256]

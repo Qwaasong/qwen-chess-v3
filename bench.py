@@ -1,13 +1,9 @@
-"""Benchmark for move generation: Make/Unmake vs Copy-Make."""
+"""Benchmark for move generation and search performance of qwen-chess-v3."""
 
 import time
 import chess
 from board_cy import CustomBitboardBoard
-try:
-    from engine_cy import generate_legal_moves_copymake
-except ImportError:
-    generate_legal_moves_copymake = None
-
+import engine
 
 def benchmark_move_generation(iterations: int = 50000) -> dict:
     positions = [
@@ -20,7 +16,7 @@ def benchmark_move_generation(iterations: int = 50000) -> dict:
     for idx, pos in enumerate(positions):
         board = CustomBitboardBoard.from_chess_board(pos)
 
-        # 1. Benchmark Make/Unmake
+        # Benchmark Make/Unmake
         moves_std = board.generate_legal_moves()
         results[f"position_{idx}_make_unmake"] = {
             "mode": "Make/Unmake",
@@ -36,49 +32,33 @@ def benchmark_move_generation(iterations: int = 50000) -> dict:
             iterations * len(moves_std) / elapsed if elapsed > 0 else float("inf")
         )
 
-        # 2. Benchmark Copy-Make
-        if generate_legal_moves_copymake is not None:
-            moves_cp = generate_legal_moves_copymake(board)
-            results[f"position_{idx}_copy_make"] = {
-                "mode": "Copy-Make",
-                "move_count": len(moves_cp),
-                "iterations": iterations,
-            }
-            start = time.perf_counter()
-            for _ in range(iterations):
-                generate_legal_moves_copymake(board)
-            elapsed = time.perf_counter() - start
-            results[f"position_{idx}_copy_make"]["elapsed_ms"] = elapsed * 1000
-            results[f"position_{idx}_copy_make"]["moves_per_sec"] = (
-                iterations * len(moves_cp) / elapsed if elapsed > 0 else float("inf")
-            )
-
-            # Sanity check move count
-            if len(moves_std) != len(moves_cp):
-                print(f"WARNING: Move count mismatch in Position {idx}! Make/Unmake={len(moves_std)}, Copy-Make={len(moves_cp)}")
-
     return results
 
+def benchmark_search(depth: int = 7) -> None:
+    print(f"\nRunning search benchmark to depth {depth}...")
+    board = chess.Board("r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3")
+    
+    t0 = time.perf_counter()
+    # Use depth_limit to restrict search depth
+    best_move = engine.get_best_move(board, time_limit=10.0, depth_limit=depth, print_info=False)
+    elapsed = time.perf_counter() - t0
+    
+    nodes = engine.info.nodes
+    nps = int(nodes / elapsed) if elapsed > 0.0 else 0
+    print(f"Search completed in {elapsed:.3f}s")
+    print(f"Nodes searched: {nodes:,}")
+    print(f"Speed: {nps:,} NPS")
+    print(f"Best Move: {best_move}")
 
 if __name__ == "__main__":
-    if generate_legal_moves_copymake is None:
-        print("Error: Could not import generate_legal_moves_copymake from engine_cy. Please compile first.")
-        exit(1)
-
-    print("Running move generation benchmark (Make/Unmake vs Copy-Make)...")
+    print("Running move generation benchmark...")
     res = benchmark_move_generation()
     
-    # Print comparison
+    # Print results
     for i in range(3):
         print(f"\n--- Position {i + 1} ---")
         k_mu = f"position_{i}_make_unmake"
-        k_cm = f"position_{i}_copy_make"
-        
         v_mu = res[k_mu]
-        v_cm = res[k_cm]
-        
         print(f"Make/Unmake: {v_mu['move_count']} legal moves, {v_mu['elapsed_ms']:.1f}ms, {v_mu['moves_per_sec']:.0f} moves/sec")
-        print(f"Copy-Make  : {v_cm['move_count']} legal moves, {v_cm['elapsed_ms']:.1f}ms, {v_cm['moves_per_sec']:.0f} moves/sec")
-        
-        speedup = (v_cm['moves_per_sec'] / v_mu['moves_per_sec'] - 1) * 100
-        print(f"Speed difference: {speedup:+.1f}%")
+
+    benchmark_search()

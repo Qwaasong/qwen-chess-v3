@@ -41,6 +41,9 @@ for idx, fen in enumerate(positions, 1):
     print(f"  Baseline (mg, eg, phase) : {base_eval}")
     print(f"  Optimized (mg, eg, phase): {opt_eval}")
     if base_eval != opt_eval:
-        print("  [!] WARNING: EVALUATION MISMATCH!")
+        print("  [!] ERROR: EVALUATION MISMATCH!")
+        sys.exit(1)
         
+print("=" * 60)
+print("SUCCESS: Evaluations match baseline!")
 print("=" * 60)

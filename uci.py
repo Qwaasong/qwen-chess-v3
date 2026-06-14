@@ -8,6 +8,13 @@ from typing import Optional
 import chess
 
 import engine
+from engine import safe_print
+
+def safe_int(s: str) -> Optional[int]:
+    try:
+        return int(s)
+    except (ValueError, TypeError):
+        return None
 
 try:
     from board_cy import CustomBitboardBoard
@@ -17,7 +24,6 @@ except ImportError:
 # Track hash and threads options set by GUI
 HASH_SIZE_MB: int = 16
 THREADS_COUNT: int = 1
-SEARCH_MODE: int = 1  # 1 = Copy-Make, 0 = Make-Unmake
 
 # Active search thread and pondering state
 search_thread: Optional[threading.Thread] = None
@@ -47,18 +53,17 @@ def search_task(
         time_limit=time_limit,
         depth_limit=d_limit,
         print_info=True,
-        search_mode=SEARCH_MODE,
     )
     
     # Retrieve ponder move if available from PV
     ponder_move_uci = engine.get_ponder_move_uci(chess_board)
     
     if best_move is None:
-        print("bestmove (none)", flush=True)
+        safe_print("bestmove (none)")
     elif ponder_move_uci:
-        print(f"bestmove {best_move.uci()} ponder {ponder_move_uci}", flush=True)
+        safe_print(f"bestmove {best_move.uci()} ponder {ponder_move_uci}")
     else:
-        print(f"bestmove {best_move.uci()}", flush=True)
+        safe_print(f"bestmove {best_move.uci()}")
 
 
 def parse_position(line: str) -> chess.Board:
@@ -116,7 +121,7 @@ def stop_search() -> None:
 
 def main() -> None:
     """Main UCI loop processing stdin."""
-    global search_thread, HASH_SIZE_MB, THREADS_COUNT, SEARCH_MODE
+    global search_thread, HASH_SIZE_MB, THREADS_COUNT
     global is_pondering, ponder_start_time, last_wtime, last_btime, last_winc, last_binc, last_movetime, last_depth_limit, last_infinite
     board = chess.Board()
 
@@ -132,29 +137,19 @@ def main() -> None:
         command = words[0]
 
         if command == "uci":
-            print("id name Qwen Chess Engine v3", flush=True)
-            print("id author Qwen / AI", flush=True)
-            print(
-                "option name Hash type spin default 16 min 1 max 1024",
-                flush=True,
-            )
-            print(
-                "option name Threads type spin default 1 min 1 max 1",
-                flush=True,
-            )
-            print(
-                "option name SearchMode type combo default Copy-Make var Copy-Make var Make-Unmake",
-                flush=True,
-            )
-            print("uciok", flush=True)
+            safe_print("id name Qwen Chess Engine v3")
+            safe_print("id author Qwen / AI")
+            safe_print("option name Hash type spin default 16 min 1 max 1024")
+            safe_print("option name Threads type spin default 1 min 1 max 1")
+            safe_print("option name Ponder type check default false")
+            safe_print("uciok")
 
         elif command == "isready":
-            print("readyok", flush=True)
+            safe_print("readyok")
 
         elif command == "setoption":
             # setoption name Hash value 32
             # setoption name Threads value 1
-            # setoption name SearchMode value Copy-Make
             try:
                 name_idx = words.index("name")
                 value_idx = words.index("value")
@@ -165,11 +160,6 @@ def main() -> None:
                     HASH_SIZE_MB = int(opt_val)
                 elif opt_name.lower() == "threads":
                     THREADS_COUNT = int(opt_val)
-                elif opt_name.lower() == "searchmode":
-                    if opt_val.lower() == "copy-make":
-                        SEARCH_MODE = 1
-                    elif opt_val.lower() == "make-unmake":
-                        SEARCH_MODE = 0
             except (ValueError, IndexError):
                 pass
 
@@ -199,22 +189,22 @@ def main() -> None:
             while i < len(words):
                 token = words[i]
                 if token == "wtime" and i + 1 < len(words):
-                    wtime = int(words[i + 1])
+                    wtime = safe_int(words[i + 1])
                     i += 2
                 elif token == "btime" and i + 1 < len(words):
-                    btime = int(words[i + 1])
+                    btime = safe_int(words[i + 1])
                     i += 2
                 elif token == "winc" and i + 1 < len(words):
-                    winc = int(words[i + 1])
+                    winc = safe_int(words[i + 1])
                     i += 2
                 elif token == "binc" and i + 1 < len(words):
-                    binc = int(words[i + 1])
+                    binc = safe_int(words[i + 1])
                     i += 2
                 elif token == "movetime" and i + 1 < len(words):
-                    movetime = int(words[i + 1])
+                    movetime = safe_int(words[i + 1])
                     i += 2
                 elif token == "depth" and i + 1 < len(words):
-                    depth_limit = int(words[i + 1])
+                    depth_limit = safe_int(words[i + 1])
                     i += 2
                 elif token == "infinite":
                     infinite = True

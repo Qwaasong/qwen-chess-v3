@@ -693,6 +693,7 @@ def negamax(
     ply: int,
     extensions: int = 0,
     prev_move: int = -1,
+    allow_nmp: bool = True,
 ) -> int:
     """Recursively searches the game tree using Alpha-Beta Negamax algorithm."""
     info.nodes += 1
@@ -709,14 +710,9 @@ def negamax(
 
     alpha_orig = alpha
     in_check = board.in_check()
-
-    # Check Extensions
     extended = 0
-    if in_check and extensions < 8:
-        depth += 1
-        extended = 1
 
-    # Transposition Table lookup
+    # Transposition Table lookup (performed BEFORE check extension)
     key = board.zobrist_key
     tt_move = None
     if key in tt:
@@ -741,10 +737,16 @@ def negamax(
                 return val
         tt_move = tt_entry.get('move')
 
+    # Check Extensions
+    if in_check and extensions < 8:
+        depth += 1
+        extended = 1
+
     # --- Null Move Pruning (NMP) ---
     has_non_pawn = False
     static_eval = color * evaluate(board)
-    if (depth >= 3 and 
+    if (allow_nmp and
+        depth >= 3 and 
         not in_check and 
         ply > 0 and 
         not info.stop and
@@ -768,7 +770,7 @@ def negamax(
             R = max(1, min(depth - 1, R))
             
             if board.make_null_move():
-                val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended, -1)
+                val = -negamax(board, depth - 1 - R, -beta, -beta + 1, -color, ply + 1, extensions + extended, -1, False)
                 board.unmake_move()
                 
                 if info.stop:
@@ -777,7 +779,7 @@ def negamax(
                 if val >= beta:
                     # Verification search for deep cuts (anti-zugzwang verification)
                     if depth >= 6:
-                        val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended, prev_move)
+                        val = negamax(board, depth - 1 - R, beta - 1, beta, color, ply, extensions + extended, prev_move, False)
                         if val >= beta:
                             return val
                     else:
@@ -862,7 +864,7 @@ def negamax(
         legal_moves_searched += 1
 
         if legal_moves_searched == 1:
-            val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move)
+            val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move, True)
         else:
             # --- Late Move Reductions (LMR) ---
             if (depth >= 2 and 
@@ -894,18 +896,18 @@ def negamax(
                     r_int = depth - 1
 
                 # Search at reduced depth with null window
-                val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move)
+                val = -negamax(board, depth - 1 - r_int, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move, True)
                 
                 # Re-search at full depth with null window if reduced search failed high
                 if val > alpha and r_int > 0:
-                    val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move)
+                    val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move, True)
             else:
                 # Search at full depth with null window
-                val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move)
+                val = -negamax(board, depth - 1, -alpha - 1, -alpha, -color, ply + 1, extensions + extended, move, True)
             
             # Re-search with full window if null window search failed high
             if val > alpha and val < beta:
-                val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move)
+                val = -negamax(board, depth - 1, -beta, -alpha, -color, ply + 1, extensions + extended, move, True)
         
         board.unmake_move()
 
@@ -1008,7 +1010,7 @@ def get_best_move(
 
         info.current_depth = depth
         if depth < 5:
-            negamax(board, depth, -INFINITE, INFINITE, color, 0, 0, -1)
+            negamax(board, depth, -INFINITE, INFINITE, color, 0, 0, -1, True)
             key_tuple = board.zobrist_key
             if key_tuple in tt:
                 last_score = tt[key_tuple]['val']
@@ -1020,7 +1022,7 @@ def get_best_move(
                 if alpha_aw < -INFINITE: alpha_aw = -INFINITE
                 if beta_aw > INFINITE: beta_aw = INFINITE
                 
-                score = negamax(board, depth, alpha_aw, beta_aw, color, 0, 0, -1)
+                score = negamax(board, depth, alpha_aw, beta_aw, color, 0, 0, -1, True)
                 
                 if info.stop:
                     break
@@ -1068,10 +1070,9 @@ def get_best_move(
             nps = int(info.nodes / elapsed) if elapsed > 0.0 else 0
             best_move_obj = board.to_chess_move(best_move_so_far)
             best_move_uci = best_move_obj.uci()
-            print(
+            safe_print(
                 f"info depth {depth} score {score_str} nodes {info.nodes} "
-                f"nps {nps} time {elapsed_ms} pv {best_move_uci}",
-                flush=True,
+                f"nps {nps} time {elapsed_ms} pv {best_move_uci}"
             )
 
         if time.time() - info.start_time > time_limit * 0.95:
@@ -1087,16 +1088,16 @@ try:
     USING_CYTHON = True
 
     _get_best_move_cy = engine_cy.get_best_move_cy
+    safe_print = engine_cy.safe_print
 
     def get_best_move(
         chess_board: chess.Board,
         time_limit: float = 1.0,
         depth_limit: int = 0,
         print_info: bool = False,
-        search_mode: int = 1,
     ) -> chess.Move | None:
         info.root_ponder_move = -1
-        return _get_best_move_cy(chess_board, time_limit, depth_limit, print_info, search_mode)
+        return _get_best_move_cy(chess_board, time_limit, depth_limit, print_info)
 
     class CythonInfoWrapper:
         @property
@@ -1148,6 +1149,12 @@ try:
         return engine_cy.get_ponder_move_uci(chess_board)
 except ImportError:
     USING_CYTHON = False
+    
+    import threading
+    stdout_lock = threading.Lock()
+    def safe_print(msg):
+        with stdout_lock:
+            print(msg, flush=True)
 
     def clear_tt():
         global tt
